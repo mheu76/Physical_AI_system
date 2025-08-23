@@ -19,7 +19,7 @@ Physical AI System에서 보안 취약점을 발견하시면, 다음 절차를 �
 
 **공개적으로 이슈를 생성하지 마세요.** 대신 다음 중 하나의 방법을 사용해주세요:
 
-1. **이메일**: security@physical-ai.dev
+1. **이메일**: mheu76@gmail.com
 2. **GitHub Security Advisory**: [보안 취약점 신고](https://github.com/your-username/physical-ai-system/security/advisories/new)
 
 ### 📧 보고 내용
