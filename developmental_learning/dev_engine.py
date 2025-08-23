@@ -12,6 +12,7 @@ from typing import Dict, List, Any, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 import random
+import re
 
 @dataclass
 class Skill:
@@ -34,6 +35,28 @@ class Experience:
     result: Dict[str, Any]
     success: bool
     learning_value: float
+
+
+def parse_text_feedback(text: str) -> Experience:
+    """자연어로 입력된 피드백을 Experience로 변환"""
+    # "동작:" 과 "결과:" 구문 추출
+    action_match = re.search(r"동작[:\s]+(.*)", text)
+    result_match = re.search(r"결과[:\s]+(.*)", text)
+
+    action_text = action_match.group(1).strip() if action_match else ""
+    result_text = result_match.group(1).strip() if result_match else ""
+
+    success = "실패" not in result_text
+
+    return Experience(
+        timestamp=datetime.now(),
+        skill_used="text_feedback",
+        context={},
+        action_taken={"description": action_text},
+        result={"description": result_text},
+        success=success,
+        learning_value=0.5,
+    )
 
 class SkillAcquisitionEngine:
     """스킬 습득 엔진"""
@@ -335,7 +358,25 @@ class DevelopmentalEngine:
     async def learn_from_experience(self, execution_result):
         """실행 결과로부터 학습"""
         print("실행 결과로부터 학습 중...")
-        
+        # text_feedback: 자연어 피드백 처리
+        if isinstance(execution_result, str):
+            experience = parse_text_feedback(execution_result)
+            self.memory.store_experience(experience)
+
+            if experience.skill_used in self.skill_engine.skills_db:
+                skill = self.skill_engine.skills_db[experience.skill_used]
+                if experience.success:
+                    skill.success_rate = min(0.95, skill.success_rate + 0.01)
+                    skill.energy_efficiency = min(1.0, skill.energy_efficiency + 0.005)
+                else:
+                    skill.success_rate = max(0.05, skill.success_rate - 0.005)
+
+            print(
+                f"경험 학습 완료: {experience.skill_used} "
+                f"({'성공' if experience.success else '실패'})"
+            )
+            return
+
         # ExecutionResult 객체에서 데이터 추출
         if hasattr(execution_result, 'success'):
             # ExecutionResult 객체인 경우
@@ -349,7 +390,7 @@ class DevelopmentalEngine:
             learning_value = execution_result.get("learning_value", 0.5)
             actions = execution_result.get("actions", {})
             errors = execution_result.get("errors", [])
-        
+
         # 경험 데이터 생성
         experience = Experience(
             timestamp=datetime.now(),
@@ -360,21 +401,21 @@ class DevelopmentalEngine:
             success=success,
             learning_value=learning_value
         )
-        
+
         # 메모리에 저장
         self.memory.store_experience(experience)
-        
+
         # 관련 스킬 업데이트
         if experience.skill_used in self.skill_engine.skills_db:
             skill = self.skill_engine.skills_db[experience.skill_used]
-            
+
             if experience.success:
                 skill.success_rate = min(0.95, skill.success_rate + 0.01)
                 skill.energy_efficiency = min(1.0, skill.energy_efficiency + 0.005)
             else:
                 # 실패했어도 경험은 쌓임
                 skill.success_rate = max(0.05, skill.success_rate - 0.005)
-        
+
         print(f"경험 학습 완료: {experience.skill_used} "
               f"({'성공' if experience.success else '실패'})")
     
