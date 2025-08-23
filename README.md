@@ -387,7 +387,7 @@ Physical AI System은 오픈소스 프로젝트입니다! 기여를 환영합니
 
 - **GitHub Issues**: [이슈 생성](https://github.com/your-username/physical-ai-system/issues)
 - **Discussions**: [토론 참여](https://github.com/your-username/physical-ai-system/discussions)
-- **Email**: maintainer@physical-ai.dev
+- **Email**: mheu76@gmail.com
 
 ## 🙏 감사의 말
 
