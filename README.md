@@ -12,6 +12,52 @@
 > 🚀 **자연어 → 물리적 동작** 실시간 변환  
 > 🌱 **발달적 학습**으로 스스로 성장하는 로봇 지능
 
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.8+
+- CUDA-compatible GPU (4GB+ for optimal performance)
+- 8GB+ RAM
+- Windows/Linux/macOS
+
+### Installation
+```bash
+# Clone the repository
+git clone https://github.com/your-username/physical-ai-system.git
+cd physical-ai-system
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run GUI-based behavior model definition system
+python behavior_model_gui.py
+
+# Or run basic example
+python examples/basic_example.py
+```
+
+### 🎮 Interactive Behavior Model Definition
+
+**GUI 시스템 실행:**
+```bash
+python behavior_model_gui.py
+```
+
+**특징:**
+- 🎯 **PHI-3.5와 자연어 대화**로 행동모델 정의
+- ⚡ **8-bit 양자화**로 GPU 메모리 50% 절약
+- 🤖 **실시간 행동모델 생성** 및 테스트
+- 📊 **시각적 모델 관리** 인터페이스
+
+**사용 예시:**
+```
+사용자: "커피를 만드는 행동모델을 정의해주세요"
+PHI-3.5: [구조화된 JSON 행동모델 생성]
+
+사용자: "청소하는 행동모델을 만들어주세요"
+PHI-3.5: [청소 행동모델 생성]
+```
+
 ## 1. 핵심 개념 이해
 
 ### Developmental Robotics (발달 로보틱스)

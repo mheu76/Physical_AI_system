@@ -5,6 +5,7 @@ torch>=2.1.0
 torchvision>=0.16.0
 transformers>=4.35.0  # PHI-3.5 지원 버전
 accelerate>=0.24.0   # 모델 로딩 최적화
+bitsandbytes>=0.41.0  # 양자화 지원
 numpy>=1.24.0
 sentencepiece>=0.1.99  # 토큰화
 

@@ -1,4 +1,24 @@
-# Physical AI System - 프로젝트 구조 완성
+# Physical AI System - 프로젝트 구조 완성 (v1.0.0)
+
+## 🚀 Latest Features
+
+### 🎮 Interactive Behavior Model Definition System
+- **GUI 기반 대화형 인터페이스**: PHI-3.5와 자연어로 행동모델 정의
+- **실시간 모델 생성**: JSON 구조화된 행동모델 자동 생성
+- **시각적 모델 관리**: 생성된 모델들의 목록, 테스트, 수정 기능
+- **빠른 명령 버튼**: 커피/청소/요리 모델 정의 단축키
+
+### ⚡ GPU Optimization with 8-bit Quantization
+- **BitsAndBytes 통합**: 메모리 사용량 50% 절약
+- **스마트 디바이스 선택**: GPU/CPU 자동 감지 및 전환
+- **메모리 안전성**: CUDA 메모리 부족 시 자동 CPU 폴백
+- **4GB GPU 지원**: 양자화로 작은 GPU에서도 안정적 실행
+
+### 🔧 Technical Improvements
+- **비동기 처리 최적화**: 이벤트 루프 충돌 해결
+- **에러 처리 강화**: 안정적인 시스템 운영
+- **타임스탬프 문제 해결**: DeprecationWarning 제거
+- **메모리 관리 개선**: 효율적인 리소스 사용
 
 ## 📁 전체 디렉토리 구조
 
@@ -10,9 +30,12 @@ physical_ai_system/
 ├── 📄 requirements.txt                  # Python 의존성
 ├── 📄 setup.py                         # 패키지 설치 스크립트
 ├── 📄 __init__.py                      # 패키지 초기화
+├── 📄 behavior_model_dialog.py         # 콘솔 기반 대화형 시스템
+├── 📄 behavior_model_gui.py            # GUI 기반 대화형 시스템
 │
 ├── 📁 foundation_model/                 # sLM Foundation Model
 │   ├── 📄 slm_foundation.py            # 미션 해석 & 추론 엔진
+│   ├── 📄 phi35_integration.py         # PHI-3.5 모델 통합
 │   ├── 📄 __init__.py
 │   ├── 📁 task_planning/               # 태스크 계획 모듈
 │   └── 📁 motion_reasoning/            # 동작 추론 모듈
@@ -42,7 +65,9 @@ physical_ai_system/
 │
 ├── 📁 examples/                       # 사용 예제
 │   ├── 📄 basic_example.py            # 기본 사용법 예제
-│   └── 📄 developmental_learning_example.py  # 발달 학습 예제
+│   ├── 📄 developmental_learning_example.py  # 발달 학습 예제
+│   ├── 📄 phi35_demo_example.py       # PHI-3.5 데모 예제
+│   └── 📄 behavior_model_example.py   # 행동모델 정의 예제
 │
 ├── 📁 tests/                          # 테스트
 │   └── 📄 test_integration.py         # 통합 테스트

@@ -6,8 +6,47 @@ Physical AI System 프로젝트의 모든 주요 변경사항이 이 파일에 �
 
 ## [Unreleased]
 
-### Added
-- 새로운 기능들이 여기에 추가됩니다
+### 🚀 Major Features Added
+- **PHI-3.5 기반 Physical AI 시스템** 완전 구현
+- **8-bit 양자화 GPU 최적화** (BitsAndBytes 통합)
+- **대화형 행동모델 정의 GUI** (tkinter 기반)
+- **발달적 학습 시스템** (5단계 성장 모델)
+- **4계층 아키텍처** 완전 구현
+
+### 🎯 Core Components
+- **Foundation Layer**: PHI-3.5 언어모델 통합
+- **Developmental Learning**: 점진적 스킬 습득 시스템
+- **AI Agent Execution**: 실시간 행동 실행 엔진
+- **Hardware Abstraction**: 물리적 하드웨어 제어
+
+### 🔧 Technical Improvements
+- **메모리 최적화**: 8-bit 양자화로 GPU 메모리 50% 절약
+- **스마트 디바이스 선택**: GPU/CPU 자동 감지 및 전환
+- **비동기 처리**: 이벤트 루프 충돌 해결
+- **에러 처리**: CUDA 메모리 부족 시 자동 CPU 폴백
+
+### 📁 New Files Added
+- `behavior_model_dialog.py` - 콘솔 기반 대화형 시스템
+- `behavior_model_gui.py` - GUI 기반 대화형 시스템
+- `examples/behavior_model_example.py` - 사용 예제
+- `foundation_model/phi35_integration.py` - PHI-3.5 통합 모듈
+
+### 🛠️ Dependencies Updated
+- `bitsandbytes>=0.41.0` - 8-bit 양자화 지원
+- `transformers>=4.35.0` - PHI-3.5 모델 지원
+- `accelerate>=0.24.0` - 모델 로딩 최적화
+
+### 🎮 User Interface
+- **좌측 패널**: PHI-3.5와 자연어 대화
+- **우측 패널**: 행동모델 관리 및 테스트
+- **빠른 명령**: 커피/청소/요리 모델 정의 버튼
+- **실시간 모델 생성**: JSON 구조화된 행동모델
+
+### 🔬 Research Features
+- **발달적 학습**: 아기처럼 점진적으로 성장하는 AI
+- **물리적 제약**: 안전성과 물리 법칙 고려
+- **실시간 적응**: 환경 변화에 동적 대응
+- **협업 능력**: 인간-로봇 협업 지원
 
 ### Changed
 - 기존 기능의 변경사항들이 여기에 기록됩니다

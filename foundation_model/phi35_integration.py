@@ -38,10 +38,22 @@ class PHI35ModelManager:
         self.system_prompt = self._create_system_prompt()
         
     def _setup_device(self, device: str) -> str:
-        """디바이스 설정"""
+        """디바이스 설정 (양자화 최적화)"""
         if device == "auto":
             if torch.cuda.is_available():
-                return "cuda"
+                # GPU 메모리 확인
+                try:
+                    total_memory = torch.cuda.get_device_properties(0).total_memory
+                    logger.info(f"GPU detected: {total_memory/1024**3:.1f}GB total memory")
+                    # 3GB 이상이면 양자화와 함께 GPU 사용
+                    if total_memory >= 3 * 1024**3:  # 3GB 이상
+                        logger.info("Using GPU with 8-bit quantization")
+                        return "cuda"
+                    else:
+                        logger.warning(f"GPU memory insufficient ({total_memory/1024**3:.1f}GB). Using CPU.")
+                        return "cpu"
+                except Exception:
+                    return "cpu"
             elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
                 return "mps" 
             else:
@@ -97,19 +109,69 @@ You are embedded in a Physical AI system that controls real robots. Your respons
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
             
-            # 모델 로드
+            # 모델 로드 (메모리 최적화)
             logger.info("Loading model...")
-            model_kwargs = {
-                "cache_dir": self.cache_dir,
-                "trust_remote_code": True,
-                "torch_dtype": torch.float16 if self.device != "cpu" else torch.float32,
-                "device_map": "auto" if self.device == "cuda" else None,
-            }
             
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                **model_kwargs
-            )
+            # 양자화 및 메모리 최적화 설정
+            if self.device == "cpu":
+                model_kwargs = {
+                    "cache_dir": self.cache_dir,
+                    "trust_remote_code": True,
+                    "torch_dtype": torch.float32,
+                    "device_map": None,
+                    "low_cpu_mem_usage": True,
+                }
+            else:
+                # GPU 모드: 8bit 양자화 적용
+                try:
+                    from transformers import BitsAndBytesConfig
+                    
+                    # 8bit 양자화 설정
+                    quantization_config = BitsAndBytesConfig(
+                        load_in_8bit=True,
+                        llm_int8_threshold=6.0,
+                        llm_int8_enable_fp32_cpu_offload=True,
+                    )
+                    
+                    model_kwargs = {
+                        "cache_dir": self.cache_dir,
+                        "trust_remote_code": True,
+                        "quantization_config": quantization_config,
+                        "device_map": "auto",
+                        "low_cpu_mem_usage": True,
+                    }
+                    logger.info("Using 8-bit quantization for GPU optimization")
+                    
+                except ImportError:
+                    logger.warning("BitsAndBytes not available, using standard FP16")
+                    model_kwargs = {
+                        "cache_dir": self.cache_dir,
+                        "trust_remote_code": True,
+                        "torch_dtype": torch.float16,
+                        "device_map": "auto",
+                        "low_cpu_mem_usage": True,
+                        "max_memory": {0: "3GB"},  # GPU 메모리 제한
+                    }
+            
+            try:
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    self.model_name,
+                    **model_kwargs
+                )
+            except torch.cuda.OutOfMemoryError:
+                logger.warning("GPU out of memory, falling back to CPU...")
+                self.device = "cpu"
+                model_kwargs = {
+                    "cache_dir": self.cache_dir,
+                    "trust_remote_code": True,
+                    "torch_dtype": torch.float32,
+                    "device_map": None,
+                    "low_cpu_mem_usage": True,
+                }
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    self.model_name,
+                    **model_kwargs
+                )
             
             # CPU로 이동 (필요한 경우)
             if self.device == "cpu":
@@ -163,7 +225,7 @@ You are embedded in a Physical AI system that controls real robots. Your respons
             # 디바이스로 이동
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
             
-            # 생성 파라미터
+            # 생성 파라미터 (DynamicCache 호환성 문제 해결)
             generation_kwargs = {
                 "max_new_tokens": max_new_tokens,
                 "temperature": temperature,
@@ -172,14 +234,27 @@ You are embedded in a Physical AI system that controls real robots. Your respons
                 "pad_token_id": self.tokenizer.pad_token_id,
                 "eos_token_id": self.tokenizer.eos_token_id,
                 "attention_mask": inputs.get("attention_mask"),
+                "use_cache": False,  # DynamicCache 문제 해결
             }
             
             # 응답 생성
             with torch.no_grad():
-                outputs = self.model.generate(
-                    inputs["input_ids"],
-                    **generation_kwargs
-                )
+                try:
+                    outputs = self.model.generate(
+                        inputs["input_ids"],
+                        **generation_kwargs
+                    )
+                except AttributeError as e:
+                    if "seen_tokens" in str(e):
+                        # DynamicCache 문제 해결을 위한 대안 방법
+                        generation_kwargs["use_cache"] = False
+                        generation_kwargs["past_key_values"] = None
+                        outputs = self.model.generate(
+                            inputs["input_ids"],
+                            **generation_kwargs
+                        )
+                    else:
+                        raise e
             
             # 디코딩
             generated_text = self.tokenizer.decode(
