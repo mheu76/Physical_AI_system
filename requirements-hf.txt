@@ -1,0 +1,20 @@
+# Hugging Face specific requirements
+gradio>=4.0.0
+huggingface_hub>=0.19.0
+transformers>=4.30.0
+
+# Core dependencies (subset of main requirements.txt)
+torch>=2.0.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+pillow>=9.5.0
+pyyaml>=6.0
+asyncio-mqtt>=0.13.0
+
+# Lightweight versions for demo
+opencv-python-headless>=4.7.0  # Headless version for server
+scipy>=1.10.0
+scikit-learn>=1.3.0
+
+# Optional: OpenAI support
+# openai>=1.0.0

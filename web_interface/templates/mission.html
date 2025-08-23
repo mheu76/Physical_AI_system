@@ -1,0 +1,374 @@
+{% extends "base.html" %}
+
+{% block title %}미션 제어 - Physical AI System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- 미션 입력 카드 -->
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-rocket"></i> 새 미션 실행
+            </div>
+            <div class="card-body">
+                <form id="mission-form">
+                    <div class="mb-3">
+                        <label for="mission-text" class="form-label">미션 설명</label>
+                        <textarea class="form-control" id="mission-text" rows="3" 
+                                  placeholder="예: Pick up the red cup and place it on the table"></textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button type="submit" class="btn btn-primary w-100" id="submit-btn">
+                                <i class="fas fa-play"></i> 미션 실행
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <button type="button" class="btn btn-secondary w-100" onclick="clearForm()">
+                                <i class="fas fa-eraser"></i> 초기화
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- 빠른 미션 버튼들 -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <i class="fas fa-bolt"></i> 빠른 미션
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-2">
+                        <button class="btn btn-outline-primary w-100" onclick="quickMission('Move to position [1, 0, 0.5]')">
+                            <i class="fas fa-arrow-up"></i> 위치 이동
+                        </button>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <button class="btn btn-outline-primary w-100" onclick="quickMission('Explore the surrounding area')">
+                            <i class="fas fa-search"></i> 주변 탐색
+                        </button>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <button class="btn btn-outline-primary w-100" onclick="quickMission('Pick up the blue object')">
+                            <i class="fas fa-hand-paper"></i> 물체 잡기
+                        </button>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <button class="btn btn-outline-primary w-100" onclick="quickMission('Place the object on the table')">
+                            <i class="fas fa-hand-holding"></i> 물체 놓기
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 미션 상태 카드 -->
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-info-circle"></i> 현재 미션 상태
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <strong>상태:</strong>
+                    <span id="current-mission-status" class="badge bg-secondary">대기 중</span>
+                </div>
+                <div class="mb-3">
+                    <strong>실행 시간:</strong>
+                    <span id="mission-execution-time">-</span>
+                </div>
+                <div class="mb-3">
+                    <strong>진행률:</strong>
+                    <div class="progress">
+                        <div id="mission-progress" class="progress-bar" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <strong>수행된 동작:</strong>
+                    <span id="actions-performed">0</span>개
+                </div>
+                <div class="mb-3">
+                    <strong>학습 가치:</strong>
+                    <span id="learning-value">0.00</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 시스템 상태 -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <i class="fas fa-cogs"></i> 시스템 상태
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <span class="status-indicator status-{{ 'online' if system_status.initialized else 'offline' }}"></span>
+                    <span>시스템: {{ '초기화됨' if system_status.initialized else '초기화 필요' }}</span>
+                </div>
+                <div class="mb-2">
+                    <span class="status-indicator status-{{ 'online' if system_status.learning_active else 'offline' }}"></span>
+                    <span>학습: {{ '활성' if system_status.learning_active else '비활성' }}</span>
+                </div>
+                <div class="mb-2">
+                    <span class="status-indicator status-online"></span>
+                    <span>안전: {{ system_status.safety_status }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 실시간 미션 로그 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-terminal"></i> 실시간 미션 로그
+                <button class="btn btn-sm btn-outline-secondary float-end" onclick="clearLog()">
+                    <i class="fas fa-trash"></i> 로그 지우기
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="mission-log" class="bg-dark text-light p-3" style="height: 300px; overflow-y: auto; font-family: monospace;">
+                    <div class="text-muted">미션 로그가 여기에 표시됩니다...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 미션 히스토리 테이블 -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-history"></i> 미션 히스토리
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>미션</th>
+                                <th>상태</th>
+                                <th>실행 시간</th>
+                                <th>동작 수</th>
+                                <th>학습 가치</th>
+                                <th>타임스탬프</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mission-history-table">
+                            <!-- 동적으로 채워짐 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentMissionId = null;
+let missionStartTime = null;
+
+// 미션 폼 제출
+document.getElementById('mission-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const missionText = document.getElementById('mission-text').value.trim();
+    if (!missionText) {
+        showNotification('미션 텍스트를 입력해주세요.', 'warning');
+        return;
+    }
+    
+    executeMission(missionText);
+});
+
+// 미션 실행
+function executeMission(missionText) {
+    const submitBtn = document.getElementById('submit-btn');
+    const originalText = submitBtn.innerHTML;
+    
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<div class="loading"></div> 실행 중...';
+    
+    // 미션 상태 업데이트
+    updateMissionStatus('실행 중', 'warning');
+    missionStartTime = Date.now();
+    
+    // 로그에 미션 시작 기록
+    addLogEntry(`🚀 미션 시작: ${missionText}`, 'info');
+    
+    fetch('/api/missions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ mission: missionText })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showNotification('미션이 성공적으로 시작되었습니다!', 'success');
+            addLogEntry('✅ 미션이 서버에서 처리 중입니다...', 'success');
+        } else {
+            showNotification('미션 시작에 실패했습니다: ' + data.message, 'danger');
+            addLogEntry('❌ 미션 시작 실패: ' + data.message, 'error');
+            updateMissionStatus('실패', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('미션 실행 중 오류가 발생했습니다.', 'danger');
+        addLogEntry('❌ 미션 실행 오류: ' + error.message, 'error');
+        updateMissionStatus('오류', 'danger');
+    })
+    .finally(() => {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    });
+}
+
+// 빠른 미션 실행
+function quickMission(missionText) {
+    document.getElementById('mission-text').value = missionText;
+    executeMission(missionText);
+}
+
+// 폼 초기화
+function clearForm() {
+    document.getElementById('mission-text').value = '';
+    updateMissionStatus('대기 중', 'secondary');
+    document.getElementById('mission-execution-time').textContent = '-';
+    document.getElementById('mission-progress').style.width = '0%';
+    document.getElementById('actions-performed').textContent = '0';
+    document.getElementById('learning-value').textContent = '0.00';
+}
+
+// 미션 상태 업데이트
+function updateMissionStatus(status, type) {
+    const statusElement = document.getElementById('current-mission-status');
+    statusElement.textContent = status;
+    statusElement.className = `badge bg-${type}`;
+}
+
+// 로그에 항목 추가
+function addLogEntry(message, type = 'info') {
+    const logContainer = document.getElementById('mission-log');
+    const timestamp = new Date().toLocaleTimeString('ko-KR');
+    
+    const logEntry = document.createElement('div');
+    logEntry.className = `log-entry log-${type}`;
+    logEntry.innerHTML = `[${timestamp}] ${message}`;
+    
+    logContainer.appendChild(logEntry);
+    logContainer.scrollTop = logContainer.scrollHeight;
+    
+    // 최대 100개 로그 항목만 유지
+    const entries = logContainer.querySelectorAll('.log-entry');
+    if (entries.length > 100) {
+        entries[0].remove();
+    }
+}
+
+// 로그 지우기
+function clearLog() {
+    const logContainer = document.getElementById('mission-log');
+    logContainer.innerHTML = '<div class="text-muted">미션 로그가 여기에 표시됩니다...</div>';
+}
+
+// 미션 히스토리 테이블 업데이트
+function updateMissionHistory() {
+    fetch('/api/missions')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const tbody = document.getElementById('mission-history-table');
+                tbody.innerHTML = '';
+                
+                data.data.forEach(mission => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${mission.id}</td>
+                        <td>${mission.mission}</td>
+                        <td><span class="badge bg-${mission.status === 'success' ? 'success' : 'danger'}">${mission.status}</span></td>
+                        <td>${mission.execution_time.toFixed(2)}초</td>
+                        <td>${mission.actions_count}</td>
+                        <td>${mission.learning_value.toFixed(2)}</td>
+                        <td>${new Date(mission.timestamp).toLocaleString('ko-KR')}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+        });
+}
+
+// Socket.IO 이벤트 리스너
+socket.on('mission_completed', function(data) {
+    const executionTime = (Date.now() - missionStartTime) / 1000;
+    
+    addLogEntry(`✅ 미션 완료! 실행 시간: ${executionTime.toFixed(2)}초`, 'success');
+    addLogEntry(`📊 수행된 동작: ${data.actions_count}개`, 'info');
+    addLogEntry(`🧠 학습 가치: ${data.learning_value.toFixed(2)}`, 'info');
+    
+    updateMissionStatus('완료', 'success');
+    document.getElementById('mission-execution-time').textContent = `${data.execution_time.toFixed(2)}초`;
+    document.getElementById('mission-progress').style.width = '100%';
+    document.getElementById('actions-performed').textContent = data.actions_count;
+    document.getElementById('learning-value').textContent = data.learning_value.toFixed(2);
+    
+    // 히스토리 업데이트
+    updateMissionHistory();
+    
+    showNotification(`미션 완료: ${data.mission}`, 'success');
+});
+
+socket.on('mission_error', function(data) {
+    addLogEntry(`❌ 미션 오류: ${data.error}`, 'error');
+    updateMissionStatus('오류', 'danger');
+    showNotification('미션 실행 중 오류가 발생했습니다.', 'danger');
+});
+
+// 페이지 로드 시 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    updateMissionHistory();
+    
+    // 주기적으로 히스토리 업데이트
+    setInterval(updateMissionHistory, 10000);
+});
+</script>
+
+<style>
+.log-entry {
+    margin-bottom: 5px;
+    padding: 2px 0;
+}
+
+.log-info {
+    color: #17a2b8;
+}
+
+.log-success {
+    color: #28a745;
+}
+
+.log-warning {
+    color: #ffc107;
+}
+
+.log-error {
+    color: #dc3545;
+}
+
+#mission-log {
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+</style>
+{% endblock %}

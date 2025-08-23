@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+
+{% block title %}학습 모니터링 - Physical AI System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- 학습 상태 카드 -->
+    <div class="col-md-6 col-lg-3 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-brain"></i> 학습 상태
+            </div>
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <span id="learning-status" class="status-indicator status-offline"></span>
+                    <span id="learning-status-text">비활성</span>
+                </div>
+                <button id="learning-btn" class="btn btn-success" onclick="toggleLearning()">
+                    <i class="fas fa-play"></i> 학습 시작
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 현재 학습 단계 -->
+    <div class="col-md-6 col-lg-3 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-layer-group"></i> 학습 단계
+            </div>
+            <div class="card-body text-center">
+                <h3 id="current-stage">1</h3>
+                <p class="text-muted">현재 단계</p>
+                <div class="progress">
+                    <div id="stage-progress" class="progress-bar" style="width: 20%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 총 연습 횟수 -->
+    <div class="col-md-6 col-lg-3 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-dumbbell"></i> 총 연습 횟수
+            </div>
+            <div class="card-body text-center">
+                <h3 id="total-practice">0</h3>
+                <p class="text-muted">전체 연습</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 평균 성공률 -->
+    <div class="col-md-6 col-lg-3 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-pie"></i> 평균 성공률
+            </div>
+            <div class="card-body text-center">
+                <h3 id="avg-success-rate">0%</h3>
+                <p class="text-muted">전체 평균</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 스킬별 상세 차트 -->
+<div class="row">
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-line"></i> 스킬별 성공률 변화
+            </div>
+            <div class="card-body">
+                <canvas id="skillsProgressChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- 학습 통계 -->
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-bar"></i> 학습 통계
+            </div>
+            <div class="card-body">
+                <div id="learning-stats">
+                    <!-- 동적으로 채워짐 -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 스킬별 상세 정보 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-list"></i> 스킬별 상세 정보
+            </div>
+            <div class="card-body">
+                <div class="row" id="skills-detail-grid">
+                    {% for skill_name, skill_data in skills_data.items() %}
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <i class="fas fa-cog"></i> {{ skill_name.replace('_', ' ').title() }}
+                            </div>
+                            <div class="card-body">
+                                <div class="text-center mb-3">
+                                    <h4 class="text-primary">{{ "%.1f"|format(skill_data.success_rate * 100) }}%</h4>
+                                    <small class="text-muted">성공률</small>
+                                </div>
+                                <div class="progress mb-3">
+                                    <div class="progress-bar bg-primary" 
+                                         style="width: {{ skill_data.success_rate * 100 }}%"></div>
+                                </div>
+                                <div class="row text-center">
+                                    <div class="col-6">
+                                        <strong>{{ skill_data.practice_count }}</strong>
+                                        <br><small class="text-muted">연습 횟수</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <strong>{{ "%.2f"|format(skill_data.success_rate * skill_data.practice_count) }}</strong>
+                                        <br><small class="text-muted">성공 횟수</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let skillsProgressChart;
+let learningActive = false;
+
+// 차트 초기화
+function initSkillsProgressChart() {
+    const ctx = document.getElementById('skillsProgressChart').getContext('2d');
+    const skillNames = {{ skills_data.keys() | list | tojson }};
+    const skillRates = [{% for skill in skills_data.values() %}{{ skill.success_rate * 100 }}{% if not loop.last %}, {% endif %}{% endfor %}];
+    
+    skillsProgressChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: skillNames.map(name => name.replace('_', ' ').toUpperCase()),
+            datasets: [{
+                label: '성공률 (%)',
+                data: skillRates,
+                borderColor: 'rgba(52, 152, 219, 1)',
+                backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+
+// 학습 토글
+function toggleLearning() {
+    const btn = document.getElementById('learning-btn');
+    const isActive = btn.innerHTML.includes('중지');
+    
+    if (isActive) {
+        // 학습 중지
+        fetch('/api/learning/stop', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showNotification('자율 학습이 중지되었습니다.', 'warning');
+                updateLearningStatus(false);
+                btn.innerHTML = '<i class="fas fa-play"></i> 학습 시작';
+                btn.className = 'btn btn-success';
+                learningActive = false;
+            }
+        });
+    } else {
+        // 학습 시작
+        fetch('/api/learning/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showNotification('자율 학습이 시작되었습니다!', 'success');
+                updateLearningStatus(true);
+                btn.innerHTML = '<i class="fas fa-stop"></i> 학습 중지';
+                btn.className = 'btn btn-danger';
+                learningActive = true;
+            }
+        });
+    }
+}
+
+// 학습 상태 업데이트
+function updateLearningStatus(active) {
+    const statusElement = document.getElementById('learning-status-text');
+    const statusIndicator = document.getElementById('learning-status');
+    
+    if (active) {
+        statusElement.textContent = '활성';
+        statusIndicator.className = 'status-indicator status-online';
+    } else {
+        statusElement.textContent = '비활성';
+        statusIndicator.className = 'status-indicator status-offline';
+    }
+}
+
+// 학습 통계 업데이트
+function updateLearningStats(skillsData) {
+    const totalPractice = Object.values(skillsData).reduce((sum, skill) => sum + skill.practice_count, 0);
+    const avgSuccessRate = Object.values(skillsData).reduce((sum, skill) => sum + skill.success_rate, 0) / Object.keys(skillsData).length;
+    
+    document.getElementById('total-practice').textContent = totalPractice;
+    document.getElementById('avg-success-rate').textContent = (avgSuccessRate * 100).toFixed(1) + '%';
+    
+    // 학습 단계 계산 (간단한 로직)
+    const currentStage = Math.min(5, Math.floor(avgSuccessRate * 5) + 1);
+    const stageProgress = (avgSuccessRate * 100) % 20;
+    
+    document.getElementById('current-stage').textContent = currentStage;
+    document.getElementById('stage-progress').style.width = stageProgress + '%';
+}
+
+// 스킬 상세 정보 업데이트
+function updateSkillsDetail(skillsData) {
+    const container = document.getElementById('skills-detail-grid');
+    container.innerHTML = '';
+    
+    Object.entries(skillsData).forEach(([skillName, skillData]) => {
+        const skillDiv = document.createElement('div');
+        skillDiv.className = 'col-md-6 col-lg-4 mb-4';
+        skillDiv.innerHTML = `
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <i class="fas fa-cog"></i> ${skillName.replace('_', ' ').toUpperCase()}
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <h4 class="text-primary">${(skillData.success_rate * 100).toFixed(1)}%</h4>
+                        <small class="text-muted">성공률</small>
+                    </div>
+                    <div class="progress mb-3">
+                        <div class="progress-bar bg-primary" 
+                             style="width: ${skillData.success_rate * 100}%"></div>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <strong>${skillData.practice_count}</strong>
+                            <br><small class="text-muted">연습 횟수</small>
+                        </div>
+                        <div class="col-6">
+                            <strong>${(skillData.success_rate * skillData.practice_count).toFixed(0)}</strong>
+                            <br><small class="text-muted">성공 횟수</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(skillDiv);
+    });
+}
+
+// Socket.IO 이벤트 리스너
+socket.on('learning_started', function(data) {
+    updateLearningStatus(true);
+    learningActive = true;
+});
+
+socket.on('learning_stopped', function(data) {
+    updateLearningStatus(false);
+    learningActive = false;
+});
+
+socket.on('skills_updated', function(data) {
+    // 차트 업데이트
+    if (skillsProgressChart) {
+        const skillRates = Object.values(data).map(skill => skill.success_rate * 100);
+        skillsProgressChart.data.datasets[0].data = skillRates;
+        skillsProgressChart.update();
+    }
+    
+    // 통계 업데이트
+    updateLearningStats(data);
+    
+    // 상세 정보 업데이트
+    updateSkillsDetail(data);
+});
+
+// 페이지 로드 시 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    initSkillsProgressChart();
+    updateLearningStats({{ skills_data | tojson }});
+    
+    // 주기적으로 스킬 데이터 업데이트
+    setInterval(() => {
+        fetch('/api/skills')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    updateLearningStats(data.data);
+                    updateSkillsDetail(data.data);
+                }
+            });
+    }, 5000);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,234 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# pdm
+.pdm.toml
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Physical AI System specific
+logs/
+*.log
+*.pdb
+*.prof
+
+# AI/ML Model files
+models/*.pt
+models/*.pth
+models/*.onnx
+models/*.h5
+models/*.pkl
+models/*.joblib
+*.mlmodel
+*.tflite
+*.pb
+
+# Hugging Face & Transformers cache
+.transformers_cache/
+.cache/huggingface/
+transformers_cache/
+
+# PHI-3.5 specific cache
+phi35_cache/
+model_cache/
+
+# Data files
+data/
+datasets/
+*.csv
+*.hdf5
+
+# Simulation files
+simulation_data/
+simulation_cache/
+physics_cache/
+*.urdf
+*.dae
+*.obj
+*.stl
+
+# Hardware configuration
+hardware_configs/
+calibration_data/
+sensor_data/
+actuator_logs/
+
+# Memory databases
+*.db
+*.sqlite
+*.sqlite3
+redis_data/
+
+# Monitoring and metrics
+prometheus_data/
+grafana_data/
+influx_data/
+wandb/
+mlruns/
+lightning_logs/
+
+# Development learning data
+episodic_memory/
+skill_cache/
+experience_replay/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Docker
+.docker/
+*.tar
+
+# Kubernetes
+*.yaml.local
+*.yml.local

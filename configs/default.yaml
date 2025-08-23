@@ -1,0 +1,186 @@
+# Physical AI System Configuration - PHI-3.5 내장
+
+# 시스템 설정
+system:
+  name: "Physical AI System"
+  version: "2.0.0-phi35"
+  log_level: "INFO"
+  max_workers: 4
+  enable_monitoring: true
+  description: "PHI-3.5 내장 발달적 로보틱스 시스템"
+
+# Foundation Model 설정 - PHI-3.5 전용
+foundation_model:
+  model_type: "phi35"  # phi35 전용
+  
+  # PHI-3.5 모델 설정
+  phi35:
+    model_name: "microsoft/Phi-3.5-mini-instruct"  # PHI-3.5 모델
+    # model_name: "microsoft/Phi-3-mini-4k-instruct"  # 대안 모델
+    # model_name: "microsoft/Phi-3-small-8k-instruct"  # 더 큰 모델 (GPU 필요)
+    device: "auto"  # auto, cpu, cuda, mps
+    cache_dir: null  # 모델 캐시 디렉토리 (null = 기본값)
+    max_length: 2048  # 최대 토큰 길이
+    
+    # 생성 파라미터
+    generation:
+      temperature: 0.7
+      top_p: 0.9
+      max_new_tokens: 512
+      do_sample: true
+    
+    # 성능 최적화
+    optimization:
+      use_flash_attention: false  # GPU에서 메모리 최적화
+      torch_dtype: "float16"  # GPU에서 메모리 절약
+      low_cpu_mem_usage: true
+  
+  # 물리 추론 특화 설정
+  physics_reasoning:
+    enable_physics_laws: true
+    gravity: 9.81
+    friction_coefficient: 0.6
+    energy_optimization: true
+  
+  # 태스크 계획 설정
+  task_planning:
+    max_subtasks: 10
+    planning_timeout: 30.0
+    safety_margin: 1.5
+
+# Developmental Learning 설정
+developmental_learning:
+  # 스킬 습득
+  skill_acquisition:
+    initial_skills: ["basic_movement", "object_recognition"]
+    max_difficulty_level: 10
+    success_threshold: 0.7
+    practice_iterations: 5
+    
+  # 커리큘럼 학습
+  curriculum:
+    enable_adaptive_curriculum: true
+    advancement_threshold: 0.7
+    max_stage: 5
+    
+  # 메모리 관리
+  memory:
+    max_episodic_memories: 10000
+    memory_cleanup_interval: 3600  # seconds
+    similarity_threshold: 0.5
+    
+  # 자율 학습
+  autonomous_learning:
+    enable: true
+    exploration_interval: 1800  # seconds
+    exploration_duration: 300   # seconds
+
+# AI Agent Execution 설정
+agent_execution:
+  # 동작 제어
+  motion_control:
+    max_velocity: 2.0      # m/s
+    max_acceleration: 5.0  # m/s²
+    safety_margin: 0.1     # m
+    trajectory_points: 10
+    
+  # 안전 모니터링
+  safety:
+    enable_collision_detection: true
+    enable_human_detection: true
+    emergency_stop_distance: 0.05  # m
+    monitoring_frequency: 10       # Hz
+    
+  # 성능 설정
+  performance:
+    execution_timeout: 300.0  # seconds
+    retry_attempts: 3
+    success_criteria_weight: 0.8
+
+# Hardware Abstraction 설정
+hardware:
+  # 센서 설정
+  sensors:
+    vision:
+      resolution: [640, 480]
+      fps: 30
+      auto_exposure: true
+      
+    tactile:
+      sensitivity: 0.1  # Newton
+      sampling_rate: 100  # Hz
+      
+    imu:
+      sampling_rate: 100  # Hz
+      filter_type: "kalman"
+      
+  # 액추에이터 설정
+  actuators:
+    joints:
+      max_velocity: 3.14    # rad/s
+      max_torque: 10.0      # Nm
+      position_accuracy: 0.01  # rad
+      
+    gripper:
+      max_force: 50.0       # Newton
+      grip_sensitivity: 0.5
+      
+  # 통신 설정
+  communication:
+    protocol: "EtherCAT"
+    baudrate: 1000000
+    timeout: 1.0
+
+# 시뮬레이션 설정
+simulation:
+  enable: true
+  physics_engine: "PyBullet"  # PyBullet, MuJoCo
+  real_time_factor: 1.0
+  
+  # 환경 설정
+  environment:
+    gravity: [0, 0, -9.81]
+    time_step: 0.01
+    solver_iterations: 100
+    
+  # 로봇 모델
+  robot:
+    urdf_path: "models/robot.urdf"
+    base_position: [0, 0, 0]
+    base_orientation: [0, 0, 0, 1]
+
+# 데이터베이스 설정
+database:
+  # Redis (메모리 캐시)
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 0
+    password: null
+    
+  # 벡터 데이터베이스
+  vector_db:
+    type: "chroma"  # chroma, faiss, pinecone
+    collection_name: "physical_ai_memories"
+    
+# 모니터링 설정
+monitoring:
+  # 프로메테우스
+  prometheus:
+    enable: true
+    port: 8000
+    
+  # 로깅
+  logging:
+    level: "INFO"
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    file_path: "logs/physical_ai.log"
+    max_file_size: "10MB"
+    backup_count: 5
+
+# 개발 설정
+development:
+  debug_mode: true
+  enable_profiling: false
+  test_mode: false
+  mock_hardware: true  # 실제 하드웨어 없이 테스트

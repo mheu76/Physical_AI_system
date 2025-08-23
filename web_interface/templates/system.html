@@ -1,0 +1,505 @@
+{% extends "base.html" %}
+
+{% block title %}시스템 상태 - Physical AI System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- 시스템 상태 개요 -->
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-server"></i> 시스템 상태 개요
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 text-center">
+                        <div class="mb-3">
+                            <span class="status-indicator status-{{ 'online' if system_status.initialized else 'offline' }}"></span>
+                            <strong>시스템</strong>
+                        </div>
+                        <p class="text-muted">{{ '초기화됨' if system_status.initialized else '초기화 필요' }}</p>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="mb-3">
+                            <span class="status-indicator status-{{ 'online' if system_status.learning_active else 'offline' }}"></span>
+                            <strong>학습</strong>
+                        </div>
+                        <p class="text-muted">{{ '활성' if system_status.learning_active else '비활성' }}</p>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="mb-3">
+                            <span class="status-indicator status-online"></span>
+                            <strong>안전</strong>
+                        </div>
+                        <p class="text-muted">{{ system_status.safety_status }}</p>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="mb-3">
+                            <span class="status-indicator status-{{ 'online' if system_status.current_mission else 'offline' }}"></span>
+                            <strong>미션</strong>
+                        </div>
+                        <p class="text-muted">{{ system_status.current_mission or '대기 중' }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- 시스템 제어 -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-cogs"></i> 시스템 제어
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <button id="init-btn" class="btn btn-primary w-100 mb-2" onclick="initializeSystem()">
+                        <i class="fas fa-play"></i> 시스템 초기화
+                    </button>
+                    <button id="shutdown-btn" class="btn btn-danger w-100 mb-2" onclick="shutdownSystem()" disabled>
+                        <i class="fas fa-power-off"></i> 시스템 종료
+                    </button>
+                    <button id="restart-btn" class="btn btn-warning w-100" onclick="restartSystem()" disabled>
+                        <i class="fas fa-redo"></i> 시스템 재시작
+                    </button>
+                </div>
+                
+                <hr>
+                
+                <div class="mb-3">
+                    <h6>학습 제어</h6>
+                    <button id="learning-btn" class="btn btn-success w-100 mb-2" onclick="toggleLearning()" disabled>
+                        <i class="fas fa-play"></i> 자율 학습 시작
+                    </button>
+                    <button id="stop-learning-btn" class="btn btn-warning w-100" onclick="stopLearning()" disabled>
+                        <i class="fas fa-stop"></i> 자율 학습 중지
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 시스템 정보 -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-info-circle"></i> 시스템 정보
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <td><strong>시스템 이름:</strong></td>
+                        <td>Physical AI System</td>
+                    </tr>
+                    <tr>
+                        <td><strong>버전:</strong></td>
+                        <td>1.0.0</td>
+                    </tr>
+                    <tr>
+                        <td><strong>마지막 업데이트:</strong></td>
+                        <td id="last-update">{{ system_status.last_update[:19] if system_status.last_update else 'N/A' }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>실행 시간:</strong></td>
+                        <td id="uptime">계산 중...</td>
+                    </tr>
+                    <tr>
+                        <td><strong>메모리 사용량:</strong></td>
+                        <td id="memory-usage">계산 중...</td>
+                    </tr>
+                    <tr>
+                        <td><strong>CPU 사용률:</strong></td>
+                        <td id="cpu-usage">계산 중...</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- 로그 모니터링 -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-terminal"></i> 실시간 로그 모니터링
+                <div class="float-end">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="clearSystemLog()">
+                        <i class="fas fa-trash"></i> 로그 지우기
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="exportLog()">
+                        <i class="fas fa-download"></i> 로그 내보내기
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="system-log" class="bg-dark text-light p-3" style="height: 400px; overflow-y: auto; font-family: monospace;">
+                    <div class="text-muted">시스템 로그가 여기에 표시됩니다...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 성능 모니터링 -->
+<div class="row mt-4">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-line"></i> CPU 사용률
+            </div>
+            <div class="card-body">
+                <canvas id="cpuChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-memory"></i> 메모리 사용률
+            </div>
+            <div class="card-body">
+                <canvas id="memoryChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let cpuChart, memoryChart;
+let systemStartTime = Date.now();
+
+// 차트 초기화
+function initCharts() {
+    // CPU 차트
+    const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+    cpuChart = new Chart(cpuCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'CPU 사용률 (%)',
+                data: [],
+                borderColor: 'rgba(231, 76, 60, 1)',
+                backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // 메모리 차트
+    const memoryCtx = document.getElementById('memoryChart').getContext('2d');
+    memoryChart = new Chart(memoryCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: '메모리 사용률 (%)',
+                data: [],
+                borderColor: 'rgba(52, 152, 219, 1)',
+                backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// 시스템 초기화
+function initializeSystem() {
+    const btn = document.getElementById('init-btn');
+    const originalText = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<div class="loading"></div> 초기화 중...';
+    
+    addSystemLog('🚀 시스템 초기화 시작...', 'info');
+    
+    fetch('/api/initialize', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showNotification('시스템이 성공적으로 초기화되었습니다!', 'success');
+            addSystemLog('✅ 시스템 초기화 완료', 'success');
+            updateSystemControls(true);
+        } else {
+            showNotification('시스템 초기화에 실패했습니다.', 'danger');
+            addSystemLog('❌ 시스템 초기화 실패', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('시스템 초기화 중 오류가 발생했습니다.', 'danger');
+        addSystemLog('❌ 시스템 초기화 오류: ' + error.message, 'error');
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    });
+}
+
+// 시스템 종료
+function shutdownSystem() {
+    if (confirm('정말로 시스템을 종료하시겠습니까?')) {
+        addSystemLog('🔄 시스템 종료 요청...', 'warning');
+        showNotification('시스템 종료 기능은 아직 구현되지 않았습니다.', 'warning');
+    }
+}
+
+// 시스템 재시작
+function restartSystem() {
+    if (confirm('정말로 시스템을 재시작하시겠습니까?')) {
+        addSystemLog('🔄 시스템 재시작 요청...', 'warning');
+        showNotification('시스템 재시작 기능은 아직 구현되지 않았습니다.', 'warning');
+    }
+}
+
+// 학습 토글
+function toggleLearning() {
+    const btn = document.getElementById('learning-btn');
+    const isActive = btn.innerHTML.includes('중지');
+    
+    if (isActive) {
+        stopLearning();
+    } else {
+        fetch('/api/learning/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showNotification('자율 학습이 시작되었습니다!', 'success');
+                addSystemLog('🧠 자율 학습 시작', 'success');
+                btn.innerHTML = '<i class="fas fa-stop"></i> 자율 학습 중지';
+                btn.className = 'btn btn-warning w-100 mb-2';
+                document.getElementById('stop-learning-btn').disabled = true;
+            }
+        });
+    }
+}
+
+// 학습 중지
+function stopLearning() {
+    fetch('/api/learning/stop', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showNotification('자율 학습이 중지되었습니다.', 'warning');
+            addSystemLog('⏹️ 자율 학습 중지', 'warning');
+            const btn = document.getElementById('learning-btn');
+            btn.innerHTML = '<i class="fas fa-play"></i> 자율 학습 시작';
+            btn.className = 'btn btn-success w-100 mb-2';
+            document.getElementById('stop-learning-btn').disabled = false;
+        }
+    });
+}
+
+// 시스템 컨트롤 업데이트
+function updateSystemControls(initialized) {
+    document.getElementById('shutdown-btn').disabled = !initialized;
+    document.getElementById('restart-btn').disabled = !initialized;
+    document.getElementById('learning-btn').disabled = !initialized;
+}
+
+// 시스템 로그 추가
+function addSystemLog(message, type = 'info') {
+    const logContainer = document.getElementById('system-log');
+    const timestamp = new Date().toLocaleTimeString('ko-KR');
+    
+    const logEntry = document.createElement('div');
+    logEntry.className = `log-entry log-${type}`;
+    logEntry.innerHTML = `[${timestamp}] ${message}`;
+    
+    logContainer.appendChild(logEntry);
+    logContainer.scrollTop = logContainer.scrollHeight;
+    
+    // 최대 200개 로그 항목만 유지
+    const entries = logContainer.querySelectorAll('.log-entry');
+    if (entries.length > 200) {
+        entries[0].remove();
+    }
+}
+
+// 시스템 로그 지우기
+function clearSystemLog() {
+    const logContainer = document.getElementById('system-log');
+    logContainer.innerHTML = '<div class="text-muted">시스템 로그가 여기에 표시됩니다...</div>';
+}
+
+// 로그 내보내기
+function exportLog() {
+    const logContainer = document.getElementById('system-log');
+    const logText = logContainer.innerText;
+    
+    const blob = new Blob([logText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `physical_ai_system_log_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// 성능 데이터 업데이트
+function updatePerformanceData() {
+    // 시뮬레이션된 성능 데이터
+    const cpuUsage = Math.random() * 30 + 10; // 10-40%
+    const memoryUsage = Math.random() * 20 + 30; // 30-50%
+    
+    const now = new Date().toLocaleTimeString('ko-KR');
+    
+    // CPU 차트 업데이트
+    cpuChart.data.labels.push(now);
+    cpuChart.data.datasets[0].data.push(cpuUsage);
+    if (cpuChart.data.labels.length > 20) {
+        cpuChart.data.labels.shift();
+        cpuChart.data.datasets[0].data.shift();
+    }
+    cpuChart.update();
+    
+    // 메모리 차트 업데이트
+    memoryChart.data.labels.push(now);
+    memoryChart.data.datasets[0].data.push(memoryUsage);
+    if (memoryChart.data.labels.length > 20) {
+        memoryChart.data.labels.shift();
+        memoryChart.data.datasets[0].data.shift();
+    }
+    memoryChart.update();
+    
+    // 정보 업데이트
+    document.getElementById('cpu-usage').textContent = cpuUsage.toFixed(1) + '%';
+    document.getElementById('memory-usage').textContent = memoryUsage.toFixed(1) + '%';
+    
+    // 업타임 계산
+    const uptime = Date.now() - systemStartTime;
+    const hours = Math.floor(uptime / (1000 * 60 * 60));
+    const minutes = Math.floor((uptime % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((uptime % (1000 * 60)) / 1000);
+    document.getElementById('uptime').textContent = `${hours}시간 ${minutes}분 ${seconds}초`;
+}
+
+// Socket.IO 이벤트 리스너
+socket.on('system_initialized', function(data) {
+    updateSystemControls(true);
+    addSystemLog('✅ 시스템 초기화 완료', 'success');
+});
+
+socket.on('system_error', function(data) {
+    addSystemLog('❌ 시스템 오류: ' + data.error, 'error');
+});
+
+socket.on('learning_started', function(data) {
+    addSystemLog('🧠 자율 학습 시작됨', 'success');
+});
+
+socket.on('learning_stopped', function(data) {
+    addSystemLog('⏹️ 자율 학습 중지됨', 'warning');
+});
+
+socket.on('learning_error', function(data) {
+    addSystemLog('❌ 학습 오류: ' + data.error, 'error');
+});
+
+// 페이지 로드 시 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    initCharts();
+    
+    // 초기 로그
+    addSystemLog('🌐 웹 인터페이스 시작', 'info');
+    addSystemLog('📊 성능 모니터링 활성화', 'info');
+    
+    // 주기적으로 성능 데이터 업데이트
+    setInterval(updatePerformanceData, 2000);
+    
+    // 주기적으로 시스템 상태 업데이트
+    setInterval(() => {
+        fetch('/api/status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('last-update').textContent = data.data.last_update.slice(0, 19);
+                }
+            });
+    }, 5000);
+});
+</script>
+
+<style>
+.log-entry {
+    margin-bottom: 5px;
+    padding: 2px 0;
+}
+
+.log-info {
+    color: #17a2b8;
+}
+
+.log-success {
+    color: #28a745;
+}
+
+.log-warning {
+    color: #ffc107;
+}
+
+.log-error {
+    color: #dc3545;
+}
+
+#system-log {
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+</style>
+{% endblock %}

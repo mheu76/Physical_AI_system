@@ -1,0 +1,427 @@
+{% extends "base.html" %}
+
+{% block title %}대시보드 - Physical AI System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- 시스템 상태 카드 -->
+    <div class="col-md-6 col-lg-3 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-robot"></i> 시스템 상태
+            </div>
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <span id="connection-status" class="status-indicator status-offline"></span>
+                    <span id="system-status-text">초기화 필요</span>
+                </div>
+                <button id="init-btn" class="btn btn-primary" onclick="initializeSystem()">
+                    <i class="fas fa-play"></i> 시스템 초기화
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 학습 상태 카드 -->
+    <div class="col-md-6 col-lg-3 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-brain"></i> 학습 상태
+            </div>
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <span id="learning-status" class="status-indicator status-offline"></span>
+                    <span id="learning-status-text">비활성</span>
+                </div>
+                <button id="learning-btn" class="btn btn-success" onclick="toggleLearning()" disabled>
+                    <i class="fas fa-play"></i> 학습 시작
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 안전 상태 카드 -->
+    <div class="col-md-6 col-lg-3 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-shield-alt"></i> 안전 상태
+            </div>
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <span id="safety-status" class="status-indicator status-online"></span>
+                    <span id="safety-status-text">안전</span>
+                </div>
+                <small class="text-muted">실시간 모니터링 중</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- 현재 미션 카드 -->
+    <div class="col-md-6 col-lg-3 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-rocket"></i> 현재 미션
+            </div>
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <span id="mission-status" class="status-indicator status-offline"></span>
+                    <span id="mission-status-text">대기 중</span>
+                </div>
+                <a href="/mission" class="btn btn-warning">
+                    <i class="fas fa-plus"></i> 새 미션
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 스킬 성공률 차트 -->
+<div class="row">
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-line"></i> 스킬 성공률
+            </div>
+            <div class="card-body">
+                <canvas id="skillsChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- 스킬 상세 정보 -->
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-list"></i> 스킬 상세
+            </div>
+            <div class="card-body">
+                <div id="skills-detail">
+                    {% for skill_name, skill_data in skills_data.items() %}
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <strong>{{ skill_name.replace('_', ' ').title() }}</strong>
+                            <span class="badge bg-primary">{{ "%.1f"|format(skill_data.success_rate * 100) }}%</span>
+                        </div>
+                        <div class="progress mt-2">
+                            <div class="progress-bar skill-progress" 
+                                 style="width: {{ skill_data.success_rate * 100 }}%"></div>
+                        </div>
+                        <small class="text-muted">연습 횟수: {{ skill_data.practice_count }}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 미션 히스토리 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-history"></i> 최근 미션 히스토리
+            </div>
+            <div class="card-body">
+                <div id="mission-history">
+                    {% if mission_history %}
+                        {% for mission in mission_history %}
+                        <div class="mission-item mission-{{ mission.status }}">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>{{ mission.mission }}</strong>
+                                </div>
+                                <div class="col-md-2">
+                                    <span class="badge bg-{{ 'success' if mission.status == 'success' else 'danger' }}">
+                                        {{ mission.status }}
+                                    </span>
+                                </div>
+                                <div class="col-md-2">
+                                    <small>{{ "%.2f"|format(mission.execution_time) }}초</small>
+                                </div>
+                                <div class="col-md-2">
+                                    <small>{{ mission.timestamp[:19] }}</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted text-center">아직 실행된 미션이 없습니다.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let skillsChart;
+
+// 차트 초기화
+function initChart() {
+    const ctx = document.getElementById('skillsChart').getContext('2d');
+    const skillNames = {{ skills_data.keys() | list | tojson }};
+    const skillRates = [{% for skill in skills_data.values() %}{{ skill.success_rate * 100 }}{% if not loop.last %}, {% endif %}{% endfor %}];
+    
+    skillsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: skillNames.map(name => name.replace('_', ' ').toUpperCase()),
+            datasets: [{
+                label: '성공률 (%)',
+                data: skillRates,
+                backgroundColor: [
+                    'rgba(39, 174, 96, 0.8)',
+                    'rgba(52, 152, 219, 0.8)',
+                    'rgba(155, 89, 182, 0.8)',
+                    'rgba(243, 156, 18, 0.8)',
+                    'rgba(231, 76, 60, 0.8)'
+                ],
+                borderColor: [
+                    'rgba(39, 174, 96, 1)',
+                    'rgba(52, 152, 219, 1)',
+                    'rgba(155, 89, 182, 1)',
+                    'rgba(243, 156, 18, 1)',
+                    'rgba(231, 76, 60, 1)'
+                ],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+
+// 시스템 초기화
+function initializeSystem() {
+    const btn = document.getElementById('init-btn');
+    const originalText = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<div class="loading"></div> 초기화 중...';
+    
+    fetch('/api/initialize', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showNotification('시스템이 성공적으로 초기화되었습니다!', 'success');
+            updateSystemStatus(true);
+            document.getElementById('learning-btn').disabled = false;
+        } else {
+            showNotification('시스템 초기화에 실패했습니다.', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('시스템 초기화 중 오류가 발생했습니다.', 'danger');
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    });
+}
+
+// 학습 토글
+function toggleLearning() {
+    const btn = document.getElementById('learning-btn');
+    const isActive = btn.innerHTML.includes('중지');
+    
+    if (isActive) {
+        // 학습 중지
+        fetch('/api/learning/stop', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showNotification('자율 학습이 중지되었습니다.', 'warning');
+                updateLearningStatus(false);
+                btn.innerHTML = '<i class="fas fa-play"></i> 학습 시작';
+                btn.className = 'btn btn-success';
+            }
+        });
+    } else {
+        // 학습 시작
+        fetch('/api/learning/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showNotification('자율 학습이 시작되었습니다!', 'success');
+                updateLearningStatus(true);
+                btn.innerHTML = '<i class="fas fa-stop"></i> 학습 중지';
+                btn.className = 'btn btn-danger';
+            }
+        });
+    }
+}
+
+// 시스템 상태 업데이트
+function updateSystemStatus(initialized) {
+    const statusElement = document.getElementById('system-status-text');
+    const statusIndicator = document.getElementById('connection-status');
+    
+    if (initialized) {
+        statusElement.textContent = '초기화 완료';
+        statusIndicator.className = 'status-indicator status-online';
+    } else {
+        statusElement.textContent = '초기화 필요';
+        statusIndicator.className = 'status-indicator status-offline';
+    }
+}
+
+// 학습 상태 업데이트
+function updateLearningStatus(active) {
+    const statusElement = document.getElementById('learning-status-text');
+    const statusIndicator = document.getElementById('learning-status');
+    
+    if (active) {
+        statusElement.textContent = '활성';
+        statusIndicator.className = 'status-indicator status-online';
+    } else {
+        statusElement.textContent = '비활성';
+        statusIndicator.className = 'status-indicator status-offline';
+    }
+}
+
+// Socket.IO 이벤트 리스너
+socket.on('system_initialized', function(data) {
+    updateSystemStatus(true);
+    document.getElementById('learning-btn').disabled = false;
+});
+
+socket.on('learning_started', function(data) {
+    updateLearningStatus(true);
+});
+
+socket.on('learning_stopped', function(data) {
+    updateLearningStatus(false);
+});
+
+socket.on('skills_updated', function(data) {
+    // 차트 업데이트
+    if (skillsChart) {
+        const skillRates = Object.values(data).map(skill => skill.success_rate * 100);
+        skillsChart.data.datasets[0].data = skillRates;
+        skillsChart.update();
+    }
+    
+    // 상세 정보 업데이트
+    updateSkillsDetail(data);
+});
+
+socket.on('mission_completed', function(data) {
+    // 미션 히스토리에 추가
+    addMissionToHistory(data);
+    showNotification(`미션 완료: ${data.mission}`, 'success');
+});
+
+// 스킬 상세 정보 업데이트
+function updateSkillsDetail(skillsData) {
+    const container = document.getElementById('skills-detail');
+    container.innerHTML = '';
+    
+    Object.entries(skillsData).forEach(([skillName, skillData]) => {
+        const skillDiv = document.createElement('div');
+        skillDiv.className = 'mb-3';
+        skillDiv.innerHTML = `
+            <div class="d-flex justify-content-between">
+                <strong>${skillName.replace('_', ' ').toUpperCase()}</strong>
+                <span class="badge bg-primary">${(skillData.success_rate * 100).toFixed(1)}%</span>
+            </div>
+            <div class="progress mt-2">
+                <div class="progress-bar skill-progress" 
+                     style="width: ${skillData.success_rate * 100}%"></div>
+            </div>
+            <small class="text-muted">연습 횟수: ${skillData.practice_count}</small>
+        `;
+        container.appendChild(skillDiv);
+    });
+}
+
+// 미션 히스토리에 추가
+function addMissionToHistory(mission) {
+    const container = document.getElementById('mission-history');
+    const missionDiv = document.createElement('div');
+    missionDiv.className = `mission-item mission-${mission.status}`;
+    
+    const timestamp = new Date(mission.timestamp).toLocaleString('ko-KR');
+    
+    missionDiv.innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <strong>${mission.mission}</strong>
+            </div>
+            <div class="col-md-2">
+                <span class="badge bg-${mission.status === 'success' ? 'success' : 'danger'}">
+                    ${mission.status}
+                </span>
+            </div>
+            <div class="col-md-2">
+                <small>${mission.execution_time.toFixed(2)}초</small>
+            </div>
+            <div class="col-md-2">
+                <small>${timestamp}</small>
+            </div>
+        </div>
+    `;
+    
+    container.insertBefore(missionDiv, container.firstChild);
+    
+    // 최대 10개만 유지
+    const missions = container.querySelectorAll('.mission-item');
+    if (missions.length > 10) {
+        missions[missions.length - 1].remove();
+    }
+}
+
+// 페이지 로드 시 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    initChart();
+    
+    // 주기적으로 상태 업데이트
+    setInterval(() => {
+        fetch('/api/status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    updateSystemStatus(data.data.initialized);
+                    updateLearningStatus(data.data.learning_active);
+                }
+            });
+    }, 5000);
+});
+</script>
+{% endblock %}
