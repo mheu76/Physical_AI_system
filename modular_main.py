@@ -180,13 +180,43 @@ class ModularPhysicalAI:
         logger.info("Starting Modular Physical AI System...")
         
         try:
-            # Main system loop
-            while self.running:
-                await asyncio.sleep(1.0)
-                
-                # Update uptime
-                if self.system_stats["start_time"]:
-                    self.system_stats["uptime"] = asyncio.get_event_loop().time() - self.system_stats["start_time"]
+            # Main system loop - use event-driven approach instead of polling
+            shutdown_event = asyncio.Event()
+            
+            # Create a task to handle shutdown gracefully
+            def handle_shutdown():
+                self.running = False
+                shutdown_event.set()
+            
+            # Set up signal handlers for graceful shutdown
+            import signal
+            if hasattr(signal, 'SIGTERM'):
+                signal.signal(signal.SIGTERM, lambda s, f: handle_shutdown())
+            if hasattr(signal, 'SIGINT'):
+                signal.signal(signal.SIGINT, lambda s, f: handle_shutdown())
+            
+            # Periodic uptime update task
+            async def update_uptime():
+                while self.running:
+                    try:
+                        if self.system_stats["start_time"]:
+                            self.system_stats["uptime"] = asyncio.get_event_loop().time() - self.system_stats["start_time"]
+                        await asyncio.sleep(10.0)  # Update less frequently
+                    except asyncio.CancelledError:
+                        break
+            
+            # Start background tasks
+            uptime_task = asyncio.create_task(update_uptime())
+            
+            # Wait for shutdown signal
+            await shutdown_event.wait()
+            
+            # Cancel background tasks
+            uptime_task.cancel()
+            try:
+                await uptime_task
+            except asyncio.CancelledError:
+                pass
                 
         except KeyboardInterrupt:
             logger.info("Received shutdown signal")

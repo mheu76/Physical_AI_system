@@ -5,6 +5,7 @@ Provides asynchronous event publishing and subscription capabilities
 
 import asyncio
 import logging
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -32,6 +33,7 @@ class Event:
     priority: EventPriority = EventPriority.NORMAL
     event_id: str = field(default_factory=lambda: str(uuid4()))
     correlation_id: Optional[str] = None
+    target: Optional[str] = None  # Target plugin or module
 
 
 @dataclass
@@ -51,7 +53,8 @@ class EventBus:
         self._handlers: Dict[str, List[EventHandler]] = {}
         self._event_queue: asyncio.Queue = asyncio.Queue()
         self._running = False
-        self._event_history: List[Event] = []
+        self._processing_task: Optional[asyncio.Task] = None
+        self._event_history: deque = deque(maxlen=1000)  # Use deque for efficient memory management
         self._max_history = 1000
         self._stats = {
             "events_published": 0,
@@ -65,12 +68,18 @@ class EventBus:
             return
         
         self._running = True
-        asyncio.create_task(self._process_events())
+        self._processing_task = asyncio.create_task(self._process_events())
         logger.info("Event Bus started")
     
     async def stop(self):
         """Stop the event bus processing loop"""
         self._running = False
+        if self._processing_task and not self._processing_task.done():
+            try:
+                self._processing_task.cancel()
+                await self._processing_task
+            except asyncio.CancelledError:
+                pass
         logger.info("Event Bus stopped")
     
     def register_handler(self, event_type: str, handler: Callable[[Event], Any], 
@@ -153,10 +162,8 @@ class EventBus:
             try:
                 event = await asyncio.wait_for(self._event_queue.get(), timeout=1.0)
                 
-                # Add to history
+                # Add to history (deque automatically handles max length)
                 self._event_history.append(event)
-                if len(self._event_history) > self._max_history:
-                    self._event_history.pop(0)
                 
                 # Process event
                 await self.publish_sync(event)
@@ -178,7 +185,7 @@ class EventBus:
     
     def get_event_history(self, event_type: Optional[str] = None, limit: int = 100) -> List[Event]:
         """Get recent event history"""
-        history = self._event_history
+        history = list(self._event_history)  # Convert deque to list
         if event_type:
             history = [e for e in history if e.event_type == event_type]
         return history[-limit:]

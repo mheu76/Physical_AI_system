@@ -15,6 +15,7 @@ from foundation_model.slm_foundation import SLMFoundation
 from developmental_learning.dev_engine import DevelopmentalEngine
 from ai_agent_execution.agent_executor import AgentExecutor
 from hardware_abstraction.hal_manager import HardwareManager
+from core.localization import set_language, get_message, system_msg, hardware_msg, execution_msg, foundation_msg, learning_msg
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -77,30 +78,35 @@ class PhysicalAI:
         import time
         start_time = time.time()
         
-        logger.info("🚀 Physical AI 시스템 초기화 시작...")
+        # 언어 설정 초기화
+        system_config = self.config.get("system", {})
+        language = system_config.get("language", "ko")
+        set_language(language)
+        
+        logger.info(f"🚀 {system_msg('initializing')}")
         
         try:
             # 1. 하드웨어 레이어 초기화
-            logger.info("🔌 하드웨어 추상화 레이어 초기화...")
+            logger.info(f"🔌 {hardware_msg('connecting')}")
             await self.hw_manager.initialize()
             
             # 2. AI Agent 실행 레이어 초기화
-            logger.info("⚡ AI Agent 실행 레이어 초기화...")
+            logger.info(f"⚡ {execution_msg('start')}")
             await self.agent_executor.initialize(self.hw_manager)
             
             # 3. 발달적 학습 엔진 초기화
-            logger.info("🌱 발달적 학습 엔진 초기화...")
+            logger.info(f"🌱 {learning_msg('learning_progress')}")
             await self.dev_engine.initialize()
             
             # 4. PHI-3.5 Foundation Model 초기화 (가장 시간이 오래 걸림)
-            logger.info("🧠 PHI-3.5 Foundation Model 초기화...")
+            logger.info(f"🧠 {foundation_msg('phi35_loading')}")
             await self.slm_foundation.initialize()
             
             # 초기화 완료
             self.initialization_time = time.time() - start_time
             self.system_ready = True
             
-            logger.info(f"✅ 시스템 초기화 완료! ({self.initialization_time:.2f}초)")
+            logger.info(f"✅ {system_msg('ready')} ({self.initialization_time:.2f}초)")
             
             # PHI-3.5 모델 정보 출력
             if self.slm_foundation.phi35_ai:

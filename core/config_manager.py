@@ -9,7 +9,7 @@ import logging
 import yaml
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 from watchdog.events import FileSystemEventHandler, FileModifiedEvent
 from watchdog.observers import Observer
 
@@ -46,7 +46,7 @@ class ConfigValidator:
             logger.error(f"Failed to register schema for {section_name}: {e}")
             return False
     
-    def validate_section(self, section_name: str, data: Dict[str, Any]) -> tuple[bool, List[str]]:
+    def validate_section(self, section_name: str, data: Dict[str, Any]) -> Tuple[bool, List[str]]:
         """Validate a configuration section against its schema"""
         try:
             schema = self._schemas.get(section_name)
@@ -115,7 +115,12 @@ class ConfigFileWatcher(FileSystemEventHandler):
         if not event.is_directory and event.src_path.endswith(('.yaml', '.yml', '.json')):
             logger.info(f"Configuration file changed: {event.src_path}")
             # Schedule reload to avoid multiple rapid reloads
-            asyncio.create_task(self.config_manager._schedule_reload(event.src_path))
+            try:
+                loop = asyncio.get_event_loop()
+                loop.create_task(self.config_manager._schedule_reload(event.src_path))
+            except RuntimeError:
+                # No event loop running, skip the reload
+                logger.warning("No event loop available for configuration reload")
 
 
 class ConfigManager:
@@ -313,38 +318,44 @@ class ConfigManager:
             logger.error(f"Failed to get config value {section_name}.{key}: {e}")
             return default
     
-    def set_value(self, section_name: str, key: str, value: Any) -> bool:
+    async def set_value(self, section_name: str, key: str, value: Any) -> bool:
         """Set a configuration value"""
         try:
+            import time
+            current_time = time.time()
+            
             if section_name not in self._sections:
                 # Create new section
                 self._sections[section_name] = ConfigSection(
                     name=section_name,
                     data={},
                     source_file=Path("runtime"),
-                    last_modified=asyncio.get_event_loop().time()
+                    last_modified=current_time
                 )
             
             section = self._sections[section_name]
             section.data[key] = value
-            section.last_modified = asyncio.get_event_loop().time()
+            section.last_modified = current_time
             
             # Validate the updated section
             is_valid, errors = self.validator.validate_section(section_name, section.data)
             section.is_valid = is_valid
             section.validation_errors = errors
             
-            # Publish update event
-            asyncio.create_task(event_bus.publish(Event(
-                event_type="config.updated",
-                data={
-                    "section": section_name,
-                    "key": key,
-                    "value": value,
-                    "is_valid": is_valid
-                },
-                source="config_manager"
-            )))
+            # Publish update event (await to ensure proper handling)
+            try:
+                await event_bus.publish(Event(
+                    event_type="config.updated",
+                    data={
+                        "section": section_name,
+                        "key": key,
+                        "value": value,
+                        "is_valid": is_valid
+                    },
+                    source="config_manager"
+                ))
+            except Exception as e:
+                logger.warning(f"Failed to publish config update event: {e}")
             
             logger.debug(f"Set config value: {section_name}.{key} = {value}")
             return True
@@ -459,5 +470,12 @@ class ConfigManager:
             logger.error(f"Error during configuration manager shutdown: {e}")
 
 
-# Global configuration manager instance
-config_manager = ConfigManager()
+# Global configuration manager instance - initialized lazily
+config_manager: Optional[ConfigManager] = None
+
+def get_config_manager() -> ConfigManager:
+    """Get or create the global configuration manager instance"""
+    global config_manager
+    if config_manager is None:
+        config_manager = ConfigManager()
+    return config_manager

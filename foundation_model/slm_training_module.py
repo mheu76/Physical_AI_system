@@ -9,11 +9,21 @@ import asyncio
 import json
 import torch
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 import numpy as np
+
+# PyTorch Dataset 클래스 임포트 추가
+try:
+    from torch.utils.data import Dataset, DataLoader
+except ImportError:
+    # torch가 없는 경우 더미 클래스
+    class Dataset:
+        pass
+    class DataLoader:
+        pass
 
 # 상대 임포트를 절대 임포트로 변경 (독립 실행을 위해)
 try:

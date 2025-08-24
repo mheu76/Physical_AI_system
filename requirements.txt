@@ -48,6 +48,10 @@ click>=8.1.0
 rich>=13.3.0
 tqdm>=4.65.0
 asyncio-mqtt>=0.13.0
+watchdog>=3.0.0  # 설정 파일 감시
+
+# GUI 지원
+tkinter  # 표준 라이브러리이지만 일부 시스템에서 별도 설치 필요
 
 # 테스트 및 개발
 pytest>=7.3.0

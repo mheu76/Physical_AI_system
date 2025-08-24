@@ -7,46 +7,267 @@ Foundation Model의 계획과 Developmental Engine의 스킬을 받아서
 
 import asyncio
 import numpy as np
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass
+from typing import Dict, List, Any, Optional, Tuple
+from dataclasses import dataclass, field
 import time
 import json
 import logging
+from datetime import datetime
+import threading
+from contextlib import asynccontextmanager
+
+# Import our enhanced error handling and performance monitoring
+try:
+    from utils.error_handling import PhysicalAIException, HardwareError, safe_async_call, require_initialization, validate_input
+    from utils.performance_monitor import profile_function, performance_context, performance_monitor
+except ImportError:
+    # Fallback if utils not available
+    logger.warning("Enhanced error handling and performance monitoring not available, using basic fallbacks")
+    
+    class PhysicalAIException(Exception):
+        pass
+    
+    class HardwareError(Exception):
+        pass
+    
+    def safe_async_call(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+    
+    def require_initialization(func):
+        return func
+    
+    def validate_input(value, expected_type, **kwargs):
+        return value
+    
+    def profile_function(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
 
 logger = logging.getLogger(__name__)
 
 @dataclass
 class ExecutionResult:
-    """실행 결과"""
+    """강화된 실행 결과"""
     success: bool
     execution_time: float
-    actions_performed: List[Dict[str, Any]]
-    errors: List[str]
-    performance_metrics: Dict[str, float]
-    learning_value: float
+    actions_performed: List[Dict[str, Any]] = field(default_factory=list)
+    errors: List[str] = field(default_factory=list)
+    performance_metrics: Dict[str, float] = field(default_factory=dict)
+    learning_value: float = 0.0
+    timestamp: datetime = field(default_factory=datetime.now)
+    execution_id: str = field(default_factory=lambda: f"exec_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}")
+    safety_violations: List[str] = field(default_factory=list)
+    resource_usage: Dict[str, Any] = field(default_factory=dict)
+    
+    def add_error(self, error: str, severity: str = "medium"):
+        """안전한 에러 추가"""
+        self.errors.append(f"[{severity.upper()}] {error}")
+        self.success = False
+        
+    def add_safety_violation(self, violation: str):
+        """안전 위반 추가"""
+        self.safety_violations.append(violation)
+        self.add_error(f"Safety violation: {violation}", "critical")
 
 class MotionController:
-    """동작 제어 모듈"""
+    """강화된 동작 제어 모듈"""
     
-    def __init__(self):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        self._config = config or {}
+        self._initialized = False
+        self._motion_lock = asyncio.Lock()
+        self._emergency_stop = asyncio.Event()
+        
+        # State variables with validation
         self.current_position = np.array([0.0, 0.0, 0.0])
         self.current_velocity = np.array([0.0, 0.0, 0.0])
-        self.max_velocity = 2.0  # m/s
-        self.max_acceleration = 5.0  # m/s²
-        self.safety_margin = 0.1  # m
+        self.current_acceleration = np.array([0.0, 0.0, 0.0])
         
+        # Configurable parameters with validation
+        self.max_velocity = validate_input(self._config.get('max_velocity', 2.0), float, 'max_velocity', min_value=0.1, max_value=10.0)
+        self.max_acceleration = validate_input(self._config.get('max_acceleration', 5.0), float, 'max_acceleration', min_value=0.1, max_value=20.0)
+        self.safety_margin = validate_input(self._config.get('safety_margin', 0.1), float, 'safety_margin', min_value=0.01, max_value=1.0)
+        
+        # Workspace limits
+        self.workspace_min = np.array(self._config.get('workspace_min', [-2.0, -2.0, 0.0]))
+        self.workspace_max = np.array(self._config.get('workspace_max', [2.0, 2.0, 2.0]))
+        
+        # Performance tracking
+        self.motion_history = []
+        self.max_history = 1000
+        
+    async def initialize(self) -> bool:
+        """비동기 초기화"""
+        if self._initialized:
+            return True
+            
+        try:
+            # Initialize safety systems
+            self._emergency_stop.clear()
+            
+            # Validate workspace
+            if not np.all(self.workspace_min < self.workspace_max):
+                raise ValueError("Invalid workspace bounds")
+                
+            # Initialize position within workspace
+            if not self._is_position_safe(self.current_position):
+                self.current_position = (self.workspace_min + self.workspace_max) / 2
+                logger.warning(f"Reset position to safe location: {self.current_position}")
+            
+            self._initialized = True
+            logger.info("MotionController initialized successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize MotionController: {e}")
+            return False
+    
+    def _is_position_safe(self, position: np.ndarray) -> bool:
+        """위치 안전성 검증"""
+        return (np.all(position >= self.workspace_min + self.safety_margin) and 
+                np.all(position <= self.workspace_max - self.safety_margin))
+    
+    async def emergency_stop(self):
+        """긴급 정지"""
+        self._emergency_stop.set()
+        self.current_velocity = np.array([0.0, 0.0, 0.0])
+        self.current_acceleration = np.array([0.0, 0.0, 0.0])
+        logger.critical("EMERGENCY STOP ACTIVATED")
+    
+    @require_initialization
+    @safe_async_call(fallback_value=False, max_retries=2, component="MotionController", operation="execute_motion")
+    @profile_function(include_memory=True, category="motion")
     async def execute_motion(self, target_position: np.ndarray, 
-                           speed_factor: float = 1.0) -> bool:
-        """동작 실행"""
-        logger.info(f"동작 실행: {self.current_position} -> {target_position}")
+                           speed_factor: float = 1.0, 
+                           force_limits: Optional[Dict[str, float]] = None) -> bool:
+        """안전한 동작 실행"""
+        # Input validation
+        target_position = validate_input(target_position, np.ndarray, "target_position")
+        speed_factor = validate_input(speed_factor, (int, float), "speed_factor", min_value=0.1, max_value=2.0)
         
-        # 경로 계획
-        path = self._plan_trajectory(target_position)
+        async with self._motion_lock:
+            # Check emergency stop
+            if self._emergency_stop.is_set():
+                raise HardwareError("Motion blocked by emergency stop")
+            
+            # Validate target position
+            if not self._is_position_safe(target_position):
+                raise HardwareError(f"Target position {target_position} is outside safe workspace")
+            
+            logger.info(f"Executing motion: {self.current_position} -> {target_position} (speed: {speed_factor})")
+            
+            async with performance_context("motion_execution", "motion"):
+                # Plan trajectory with safety checks
+                trajectory = await self._plan_safe_trajectory(target_position, speed_factor)
+                
+                # Execute trajectory
+                return await self._execute_trajectory(trajectory, force_limits)
+    
+    async def _plan_safe_trajectory(self, target: np.ndarray, speed_factor: float) -> List[np.ndarray]:
+        """안전한 궤적 계획"""
+        path = []
+        current = self.current_position.copy()
         
-        # 경로를 따라 이동 (시뮬레이션)
-        for waypoint in path:
-            await self._move_to_waypoint(waypoint, speed_factor)
-            await asyncio.sleep(0.1)  # 물리적 시간 지연
+        # Calculate distance and steps
+        distance = np.linalg.norm(target - current)
+        max_step_size = (self.max_velocity * speed_factor) * 0.1  # 10Hz update rate
+        num_steps = max(int(distance / max_step_size), 1)
+        
+        # Generate path points
+        for i in range(num_steps + 1):
+            t = i / num_steps
+            # Smooth interpolation with acceleration/deceleration
+            smooth_t = 0.5 * (1 - np.cos(np.pi * t))
+            point = current + smooth_t * (target - current)
+            
+            # Ensure each point is safe
+            if self._is_position_safe(point):
+                path.append(point)
+            else:
+                # Clamp to safe bounds
+                safe_point = np.clip(point, 
+                                   self.workspace_min + self.safety_margin,
+                                   self.workspace_max - self.safety_margin)
+                path.append(safe_point)
+                logger.warning(f"Clamped unsafe waypoint {point} to {safe_point}")
+        
+        return path
+    
+    async def _execute_trajectory(self, trajectory: List[np.ndarray], 
+                                force_limits: Optional[Dict[str, float]]) -> bool:
+        """궤적 실행"""
+        try:
+            for i, waypoint in enumerate(trajectory):
+                # Check for emergency stop
+                if self._emergency_stop.is_set():
+                    raise HardwareError("Motion interrupted by emergency stop")
+                
+                # Move to waypoint
+                await self._move_to_waypoint(waypoint)
+                
+                # Record motion history
+                self.motion_history.append({
+                    'timestamp': datetime.now(),
+                    'position': waypoint.copy(),
+                    'velocity': self.current_velocity.copy(),
+                    'waypoint_index': i
+                })
+                
+                # Limit history size
+                if len(self.motion_history) > self.max_history:
+                    self.motion_history.pop(0)
+                
+                # Small delay for realistic motion
+                await asyncio.sleep(0.05)
+            
+            logger.info(f"Motion completed successfully to {self.current_position}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Motion execution failed: {e}")
+            await self.emergency_stop()
+            raise HardwareError(f"Motion execution failed: {e}")
+    
+    async def _move_to_waypoint(self, waypoint: np.ndarray):
+        """단일 웨이포인트로 이동"""
+        # Calculate velocity
+        direction = waypoint - self.current_position
+        distance = np.linalg.norm(direction)
+        
+        if distance > 1e-6:  # Avoid division by zero
+            self.current_velocity = direction / distance * min(self.max_velocity, distance / 0.1)
+        else:
+            self.current_velocity = np.array([0.0, 0.0, 0.0])
+        
+        # Update position
+        self.current_position = waypoint.copy()
+        
+        # Simulate some processing time
+        await asyncio.sleep(0.01)
+        
+    def get_status(self) -> Dict[str, Any]:
+        """현재 상태 조회"""
+        return {
+            'initialized': self._initialized,
+            'emergency_stop': self._emergency_stop.is_set(),
+            'current_position': self.current_position.tolist(),
+            'current_velocity': self.current_velocity.tolist(),
+            'workspace_min': self.workspace_min.tolist(),
+            'workspace_max': self.workspace_max.tolist(),
+            'max_velocity': self.max_velocity,
+            'max_acceleration': self.max_acceleration,
+            'motion_history_size': len(self.motion_history)
+        }
+    
+    async def shutdown(self):
+        """정리 및 종료"""
+        await self.emergency_stop()
+        self.motion_history.clear()
+        self._initialized = False
+        logger.info("MotionController shutdown complete")
             
         logger.info(f"동작 완료: 현재 위치 {self.current_position}")
         return True

@@ -52,9 +52,9 @@ class PluginInfo:
     description: str
     author: str
     category: str
-    dependencies: List[str] = field(default_factory=list)
     entry_point: str
     file_path: Path
+    dependencies: List[str] = field(default_factory=list)
     config_schema: Optional[Dict[str, Any]] = None
 
 

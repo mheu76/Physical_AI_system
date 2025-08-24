@@ -160,6 +160,11 @@ You are embedded in a Physical AI system that controls real robots. Your respons
                 )
             except torch.cuda.OutOfMemoryError:
                 logger.warning("GPU out of memory, falling back to CPU...")
+                # Clear GPU memory before fallback
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+                
                 self.device = "cpu"
                 model_kwargs = {
                     "cache_dir": self.cache_dir,
@@ -213,7 +218,7 @@ You are embedded in a Physical AI system that controls real robots. Your respons
             # 전체 프롬프트 구성
             full_prompt = f"{self.system_prompt}\n\nUser: {prompt}\nAssistant:"
             
-            # 토큰화
+            # 토큰화 (attention_mask 명시적 생성)
             inputs = self.tokenizer(
                 full_prompt,
                 return_tensors="pt",
@@ -222,10 +227,15 @@ You are embedded in a Physical AI system that controls real robots. Your respons
                 max_length=self.max_length - max_new_tokens
             )
             
+            # attention_mask 명시적 생성 (패딩 토큰 이슈 해결)
+            if inputs.get("attention_mask") is None:
+                attention_mask = (inputs["input_ids"] != self.tokenizer.pad_token_id).long()
+                inputs["attention_mask"] = attention_mask
+            
             # 디바이스로 이동
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
             
-            # 생성 파라미터 (DynamicCache 호환성 문제 해결)
+            # 생성 파라미터 (DynamicCache 완전 비활성화)
             generation_kwargs = {
                 "max_new_tokens": max_new_tokens,
                 "temperature": temperature,
@@ -234,27 +244,62 @@ You are embedded in a Physical AI system that controls real robots. Your respons
                 "pad_token_id": self.tokenizer.pad_token_id,
                 "eos_token_id": self.tokenizer.eos_token_id,
                 "attention_mask": inputs.get("attention_mask"),
-                "use_cache": False,  # DynamicCache 문제 해결
+                "use_cache": False,  # 캐시 완전 비활성화
+                "past_key_values": None,  # 이전 키-값 상태 없음
+                "return_dict_in_generate": False,  # 간단한 출력 형식
             }
             
-            # 응답 생성
+            # 응답 생성 (더 강화된 오류 처리)
             with torch.no_grad():
                 try:
+                    # transformers 4.21+ 호환성을 위한 추가 설정
+                    if hasattr(self.model.config, 'use_cache'):
+                        original_use_cache = self.model.config.use_cache
+                        self.model.config.use_cache = False
+                    
+                    # 모델 생성 실행
                     outputs = self.model.generate(
                         inputs["input_ids"],
                         **generation_kwargs
                     )
+                    
+                    # 원래 캐시 설정 복구
+                    if hasattr(self.model.config, 'use_cache'):
+                        self.model.config.use_cache = original_use_cache
+                        
                 except AttributeError as e:
-                    if "seen_tokens" in str(e):
-                        # DynamicCache 문제 해결을 위한 대안 방법
-                        generation_kwargs["use_cache"] = False
-                        generation_kwargs["past_key_values"] = None
-                        outputs = self.model.generate(
-                            inputs["input_ids"],
-                            **generation_kwargs
-                        )
+                    if "seen_tokens" in str(e) or "DynamicCache" in str(e) or "cache" in str(e).lower():
+                        # 캐시 관련 오류 처리
+                        logger.warning(f"캐시 관련 오류 감지, Greedy Decoding으로 대체: {e}")
+                        try:
+                            # Greedy decoding (캐시 없이)
+                            generation_kwargs.update({
+                                "do_sample": False,  # Greedy 모드
+                                "temperature": None,  # Temperature 제거
+                                "top_p": None,       # Top-p 제거
+                                "use_cache": False,
+                                "past_key_values": None
+                            })
+                            
+                            outputs = self.model.generate(
+                                inputs["input_ids"],
+                                max_new_tokens=max_new_tokens,
+                                pad_token_id=self.tokenizer.pad_token_id,
+                                eos_token_id=self.tokenizer.eos_token_id,
+                                attention_mask=inputs.get("attention_mask"),
+                                do_sample=False,
+                                use_cache=False
+                            )
+                        except Exception as greedy_e:
+                            logger.error(f"Greedy decoding도 실패: {greedy_e}")
+                            # 최종 폴백: 단순 forward pass
+                            return self._fallback_generation(inputs, max_new_tokens)
                     else:
+                        logger.error(f"예상치 못한 AttributeError: {e}")
                         raise e
+                except Exception as e:
+                    logger.error(f"모델 생성 중 일반 오류: {e}")
+                    return self._fallback_generation(inputs, max_new_tokens)
             
             # 디코딩
             generated_text = self.tokenizer.decode(
@@ -333,6 +378,46 @@ JSON Response:"""
             return True
         except Exception:
             return False
+    
+    def _fallback_generation(self, inputs: Dict[str, Any], max_new_tokens: int) -> str:
+        """최종 폴백: 간단한 텍스트 생성"""
+        try:
+            logger.info("최종 폴백 모드: 단순 forward pass 사용")
+            
+            # 매우 단순한 생성 방식
+            input_ids = inputs["input_ids"]
+            input_length = input_ids.shape[1]
+            
+            # 작은 배치로 토큰 하나씩 생성
+            generated_tokens = []
+            current_ids = input_ids
+            
+            for _ in range(min(max_new_tokens, 100)):  # 최대 100토큰으로 제한
+                with torch.no_grad():
+                    # Forward pass만 수행
+                    outputs = self.model(current_ids, use_cache=False)
+                    logits = outputs.logits
+                    
+                    # 다음 토큰 예측 (greedy)
+                    next_token = torch.argmax(logits[0, -1, :], dim=-1).unsqueeze(0).unsqueeze(0)
+                    
+                    # EOS 토큰이면 종료
+                    if next_token.item() == self.tokenizer.eos_token_id:
+                        break
+                    
+                    generated_tokens.append(next_token.item())
+                    current_ids = torch.cat([current_ids, next_token], dim=1)
+            
+            # 생성된 토큰들을 텍스트로 변환
+            if generated_tokens:
+                generated_text = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+                return generated_text.strip()
+            else:
+                return "죄송합니다. 응답을 생성할 수 없습니다."
+                
+        except Exception as e:
+            logger.error(f"폴백 생성도 실패: {e}")
+            return "텍스트 생성 오류가 발생했습니다."
     
     def get_model_info(self) -> Dict[str, Any]:
         """모델 정보 반환"""

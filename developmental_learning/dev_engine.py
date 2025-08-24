@@ -8,11 +8,14 @@ Developmental Learning Engine - 발달적 학습 시스템
 import asyncio
 import numpy as np
 import json
-from typing import Dict, List, Any, Tuple
-from dataclasses import dataclass, asdict
+from typing import Dict, List, Any, Tuple, Optional
+from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta
+from collections import defaultdict, deque
 import random
 import logging
+import weakref
+from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
@@ -21,33 +24,94 @@ class Skill:
     """스킬 정의"""
     name: str
     difficulty_level: int  # 1(쉬움) ~ 10(매우 어려움)
-    prerequisites: List[str]
-    success_rate: float
-    practice_count: int
-    last_practiced: datetime
-    energy_efficiency: float
+    prerequisites: List[str] = field(default_factory=list)
+    success_rate: float = 0.0
+    practice_count: int = 0
+    last_practiced: Optional[datetime] = None
+    energy_efficiency: float = 1.0
+    version: str = "1.0"
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def __post_init__(self):
+        """Validate skill parameters"""
+        if not (1 <= self.difficulty_level <= 10):
+            raise ValueError(f"Difficulty level must be 1-10, got {self.difficulty_level}")
+        if not (0.0 <= self.success_rate <= 1.0):
+            raise ValueError(f"Success rate must be 0.0-1.0, got {self.success_rate}")
+        if self.practice_count < 0:
+            raise ValueError(f"Practice count cannot be negative, got {self.practice_count}")
     
 @dataclass
 class Experience:
     """경험 데이터"""
     timestamp: datetime
     skill_used: str
-    context: Dict[str, Any]
-    action_taken: Dict[str, Any]
-    result: Dict[str, Any]
-    success: bool
-    learning_value: float
+    context: Dict[str, Any] = field(default_factory=dict)
+    action_taken: Dict[str, Any] = field(default_factory=dict)
+    result: Dict[str, Any] = field(default_factory=dict)
+    success: bool = False
+    learning_value: float = 0.0
+    experience_id: str = field(default_factory=lambda: f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}")
+    session_id: Optional[str] = None
+    
+    def __post_init__(self):
+        """Validate experience parameters"""
+        if not (-1.0 <= self.learning_value <= 1.0):
+            logger.warning(f"Learning value {self.learning_value} outside expected range [-1.0, 1.0]")
 
 class SkillAcquisitionEngine:
-    """스킬 습득 엔진"""
+    """스킬 습득 엔진 - 강화된 버전"""
     
-    def __init__(self):
-        self.skills_db = self._initialize_basic_skills()
-        self.learning_progress = {}
-        self.curriculum = CurriculumLearning()
+    def __init__(self, max_experiences: int = 10000):
+        self.skills_db: Dict[str, Skill] = {}
+        self.learning_progress: Dict[str, Dict[str, Any]] = defaultdict(dict)
+        self.experience_buffer: deque = deque(maxlen=max_experiences)
+        self.curriculum: Optional['CurriculumLearning'] = None
+        self._skill_dependencies: Dict[str, set] = {}
+        self._performance_cache: Dict[str, Tuple[float, datetime]] = {}
+        self._initialization_lock = asyncio.Lock()
+        self._initialized = False
         
-    def _initialize_basic_skills(self) -> Dict[str, Skill]:
-        """기본 스킬 초기화"""
+        # 성능 메트릭
+        self.stats = {
+            "total_experiences": 0,
+            "successful_experiences": 0,
+            "skills_learned": 0,
+            "avg_learning_rate": 0.0,
+            "last_updated": datetime.now()
+        }
+        
+    async def initialize(self) -> bool:
+        """비동기 초기화"""
+        async with self._initialization_lock:
+            if self._initialized:
+                return True
+                
+            try:
+                self.skills_db = await self._initialize_basic_skills()
+                self.curriculum = CurriculumLearning()
+                await self.curriculum.initialize()
+                self._build_dependency_graph()
+                self._initialized = True
+                logger.info(f"SkillAcquisitionEngine initialized with {len(self.skills_db)} skills")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to initialize SkillAcquisitionEngine: {e}")
+                return False
+    
+    async def _initialize_basic_skills(self) -> Dict[str, Skill]:
+        """기본 스킬 비동기 초기화"""
+        try:
+            basic_skills = {}
+        
+    def _build_dependency_graph(self):
+        """스킬 의존성 그래프 구축"""
+        self._skill_dependencies.clear()
+        for skill_name, skill in self.skills_db.items():
+            self._skill_dependencies[skill_name] = set(skill.prerequisites)
+            
+    async def _initialize_basic_skills_sync(self) -> Dict[str, Skill]:
+        """기본 스킬 동기 초기화"""
         now = datetime.now()
         return {
             "basic_movement": Skill(

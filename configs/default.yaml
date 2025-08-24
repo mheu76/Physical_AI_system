@@ -7,6 +7,8 @@ system:
   environment: "development"  # development, production, simulation
   debug_mode: true
   mock_hardware: true  # 하드웨어 없이 시뮬레이션 모드
+  language: "ko"  # 시스템 언어 설정 (ko, en)
+  locale: "ko_KR"  # 로케일 설정
 
 foundation_model:
   model_type: "phi35"

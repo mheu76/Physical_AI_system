@@ -7,32 +7,144 @@ Hardware Abstraction Layer - 하드웨어 추상화 레이어
 
 import asyncio
 import numpy as np
-from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass
+from typing import Dict, List, Any, Optional, Tuple, Union
+from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 import json
 import logging
+from datetime import datetime
+from enum import Enum
+from contextlib import asynccontextmanager
+import threading
+import weakref
+
+# Import our enhanced error handling and performance monitoring
+try:
+    from utils.error_handling import PhysicalAIException, HardwareError, safe_async_call, require_initialization, validate_input
+    from utils.performance_monitor import profile_function, performance_context, performance_monitor
+except ImportError:
+    # Fallback if utils not available
+    logger.warning("Enhanced error handling and performance monitoring not available, using basic fallbacks")
+    
+    class PhysicalAIException(Exception):
+        pass
+    
+    class HardwareError(Exception):
+        pass
+    
+    def safe_async_call(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+    
+    def require_initialization(func):
+        return func
+    
+    def validate_input(value, expected_type, **kwargs):
+        return value
+    
+    def profile_function(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
 
 logger = logging.getLogger(__name__)
 
+class SensorStatus(Enum):
+    """센서 상태"""
+    OFFLINE = "offline"
+    INITIALIZING = "initializing"
+    ACTIVE = "active"
+    ERROR = "error"
+    CALIBRATING = "calibrating"
+
+class ActuatorStatus(Enum):
+    """액추에이터 상태"""
+    OFFLINE = "offline"
+    READY = "ready"
+    EXECUTING = "executing"
+    ERROR = "error"
+    EMERGENCY_STOP = "emergency_stop"
+
 @dataclass
 class SensorData:
-    """센서 데이터 구조"""
-    timestamp: float
-    sensor_type: str
-    data: Any
-    confidence: float
+    """강화된 센서 데이터 구조"""
+    timestamp: datetime = field(default_factory=datetime.now)
+    sensor_type: str = ""
+    sensor_id: str = ""
+    data: Any = None
+    confidence: float = 1.0
+    status: SensorStatus = SensorStatus.ACTIVE
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    data_quality: float = 1.0  # 0.0 (poor) to 1.0 (excellent)
+    
+    def __post_init__(self):
+        """Validate sensor data"""
+        self.confidence = validate_input(self.confidence, (int, float), "confidence", min_value=0.0, max_value=1.0)
+        self.data_quality = validate_input(self.data_quality, (int, float), "data_quality", min_value=0.0, max_value=1.0)
+        
+    def is_valid(self) -> bool:
+        """Check if sensor data is valid and usable"""
+        return (self.status == SensorStatus.ACTIVE and 
+                self.confidence >= 0.5 and 
+                self.data_quality >= 0.5 and
+                self.data is not None)
 
 @dataclass
 class ActuatorCommand:
-    """액추에이터 명령 구조"""
+    """강화된 액추에이터 명령 구조"""
     actuator_id: str
     command_type: str
-    parameters: Dict[str, Any]
-    priority: int
+    parameters: Dict[str, Any] = field(default_factory=dict)
+    priority: int = 1
+    timestamp: datetime = field(default_factory=datetime.now)
+    timeout: float = 5.0  # seconds
+    safety_checks: bool = True
+    command_id: str = field(default_factory=lambda: f"cmd_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}")
+    expected_duration: Optional[float] = None
+    
+    def __post_init__(self):
+        """Validate command parameters"""
+        self.priority = validate_input(self.priority, int, "priority", min_value=0, max_value=10)
+        self.timeout = validate_input(self.timeout, (int, float), "timeout", min_value=0.1, max_value=300.0)
+        
+        if not self.actuator_id:
+            raise ValueError("actuator_id cannot be empty")
+        if not self.command_type:
+            raise ValueError("command_type cannot be empty")
+
+@dataclass
+class HardwareHealth:
+    """하드웨어 상태 정보"""
+    device_id: str
+    device_type: str
+    status: Union[SensorStatus, ActuatorStatus]
+    last_update: datetime = field(default_factory=datetime.now)
+    error_count: int = 0
+    uptime: float = 0.0
+    temperature: Optional[float] = None
+    power_consumption: Optional[float] = None
+    diagnostics: Dict[str, Any] = field(default_factory=dict)
+    
+    def is_healthy(self) -> bool:
+        """Check if hardware is healthy"""
+        return (self.status not in [SensorStatus.ERROR, ActuatorStatus.ERROR, ActuatorStatus.EMERGENCY_STOP] and
+                self.error_count < 10)
 
 class SensorInterface(ABC):
-    """센서 인터페이스 추상 클래스"""
+    """강화된 센서 인터페이스 추상 클래스"""
+    
+    def __init__(self, sensor_id: str):
+        self.sensor_id = sensor_id
+        self._initialized = False
+        self._status = SensorStatus.OFFLINE
+        self._health = HardwareHealth(sensor_id, self.__class__.__name__, SensorStatus.OFFLINE)
+        self._lock = asyncio.Lock()
+        
+    @abstractmethod
+    async def initialize(self) -> bool:
+        """센서 초기화"""
+        pass
     
     @abstractmethod
     async def read_data(self) -> SensorData:
@@ -43,11 +155,204 @@ class SensorInterface(ABC):
     async def calibrate(self) -> bool:
         """센서 캘리브레이션"""
         pass
+    
+    @abstractmethod
+    async def shutdown(self) -> bool:
+        """센서 종료"""
+        pass
+    
+    @property
+    def status(self) -> SensorStatus:
+        return self._status
+    
+    @property
+    def health(self) -> HardwareHealth:
+        self._health.last_update = datetime.now()
+        return self._health
+    
+    async def get_diagnostics(self) -> Dict[str, Any]:
+        """센서 진단 정보"""
+        return {
+            "sensor_id": self.sensor_id,
+            "status": self._status.value,
+            "initialized": self._initialized,
+            "health": self._health.__dict__
+        }
+
+class ActuatorInterface(ABC):
+    """강화된 액추에이터 인터페이스 추상 클래스"""
+    
+    def __init__(self, actuator_id: str):
+        self.actuator_id = actuator_id
+        self._initialized = False
+        self._status = ActuatorStatus.OFFLINE
+        self._health = HardwareHealth(actuator_id, self.__class__.__name__, ActuatorStatus.OFFLINE)
+        self._lock = asyncio.Lock()
+        self._emergency_stop = asyncio.Event()
+        
+    @abstractmethod
+    async def initialize(self) -> bool:
+        """액추에이터 초기화"""
+        pass
+    
+    @abstractmethod
+    async def execute_command(self, command: ActuatorCommand) -> bool:
+        """명령 실행"""
+        pass
+    
+    @abstractmethod
+    async def emergency_stop(self) -> bool:
+        """긴급 정지"""
+        pass
+    
+    @abstractmethod
+    async def shutdown(self) -> bool:
+        """액추에이터 종료"""
+        pass
+    
+    @property
+    def status(self) -> ActuatorStatus:
+        return self._status
+    
+    @property
+    def health(self) -> HardwareHealth:
+        self._health.last_update = datetime.now()
+        return self._health
+    
+    async def get_diagnostics(self) -> Dict[str, Any]:
+        """액추에이터 진단 정보"""
+        return {
+            "actuator_id": self.actuator_id,
+            "status": self._status.value,
+            "initialized": self._initialized,
+            "emergency_stop": self._emergency_stop.is_set(),
+            "health": self._health.__dict__
+        }
 
 class VisionSensor(SensorInterface):
-    """비전 센서 (RGB-D 카메라)"""
+    """강화된 비전 센서 (RGB-D 카메라)"""
     
-    def __init__(self, sensor_id: str):
+    def __init__(self, sensor_id: str, config: Optional[Dict[str, Any]] = None):
+        super().__init__(sensor_id)
+        self._config = config or {}
+        self.resolution = self._config.get('resolution', (640, 480))
+        self.fps = self._config.get('fps', 30)
+        self.auto_calibrate = self._config.get('auto_calibrate', True)
+        
+        # Mock camera data for simulation
+        self._simulation_mode = self._config.get('simulation_mode', True)
+        self._frame_count = 0
+        
+    @require_initialization
+    @safe_async_call(fallback_value=False, max_retries=3, component="VisionSensor", operation="initialize")
+    async def initialize(self) -> bool:
+        """비전 센서 초기화"""
+        try:
+            self._status = SensorStatus.INITIALIZING
+            
+            if self._simulation_mode:
+                logger.info(f"Initializing vision sensor {self.sensor_id} in simulation mode")
+                # Simulate initialization time
+                await asyncio.sleep(0.5)
+            else:
+                # Real camera initialization would go here
+                logger.info(f"Initializing real camera {self.sensor_id}")
+            
+            # Auto-calibrate if enabled
+            if self.auto_calibrate:
+                await self.calibrate()
+            
+            self._status = SensorStatus.ACTIVE
+            self._initialized = True
+            self._health.status = SensorStatus.ACTIVE
+            
+            logger.info(f"Vision sensor {self.sensor_id} initialized successfully")
+            return True
+            
+        except Exception as e:
+            self._status = SensorStatus.ERROR
+            self._health.status = SensorStatus.ERROR
+            self._health.error_count += 1
+            logger.error(f"Failed to initialize vision sensor {self.sensor_id}: {e}")
+            return False
+    
+    @require_initialization
+    @profile_function(include_memory=True, category="sensor")
+    async def read_data(self) -> SensorData:
+        """비전 데이터 읽기"""
+        async with self._lock:
+            try:
+                if self._simulation_mode:
+                    # Generate mock RGB-D data
+                    rgb_data = np.random.randint(0, 255, (*self.resolution, 3), dtype=np.uint8)
+                    depth_data = np.random.uniform(0.1, 5.0, self.resolution)
+                    
+                    data = {
+                        'rgb': rgb_data,
+                        'depth': depth_data,
+                        'frame_id': self._frame_count,
+                        'resolution': self.resolution,
+                        'fps': self.fps
+                    }
+                    
+                    confidence = 0.95  # High confidence for simulation
+                    quality = 0.9
+                else:
+                    # Real camera data acquisition would go here
+                    data = {}
+                    confidence = 0.8
+                    quality = 0.85
+                
+                self._frame_count += 1
+                
+                return SensorData(
+                    sensor_type="vision",
+                    sensor_id=self.sensor_id,
+                    data=data,
+                    confidence=confidence,
+                    status=self._status,
+                    data_quality=quality,
+                    metadata={
+                        'frame_count': self._frame_count,
+                        'simulation_mode': self._simulation_mode
+                    }
+                )
+                
+            except Exception as e:
+                self._health.error_count += 1
+                logger.error(f"Failed to read vision data from {self.sensor_id}: {e}")
+                raise HardwareError(f"Vision sensor read failed: {e}", self.sensor_id, "camera")
+    
+    @safe_async_call(fallback_value=False, max_retries=2, component="VisionSensor", operation="calibrate")
+    async def calibrate(self) -> bool:
+        """비전 센서 캘리브레이션"""
+        try:
+            self._status = SensorStatus.CALIBRATING
+            
+            # Simulate calibration process
+            logger.info(f"Calibrating vision sensor {self.sensor_id}")
+            await asyncio.sleep(1.0)  # Simulate calibration time
+            
+            self._status = SensorStatus.ACTIVE
+            logger.info(f"Vision sensor {self.sensor_id} calibrated successfully")
+            return True
+            
+        except Exception as e:
+            self._status = SensorStatus.ERROR
+            self._health.error_count += 1
+            logger.error(f"Failed to calibrate vision sensor {self.sensor_id}: {e}")
+            return False
+    
+    async def shutdown(self) -> bool:
+        """비전 센서 종료"""
+        try:
+            self._status = SensorStatus.OFFLINE
+            self._initialized = False
+            logger.info(f"Vision sensor {self.sensor_id} shutdown complete")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to shutdown vision sensor {self.sensor_id}: {e}")
+            return False
         self.sensor_id = sensor_id
         self.resolution = (640, 480)
         self.fps = 30
