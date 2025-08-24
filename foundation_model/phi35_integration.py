@@ -331,7 +331,7 @@ JSON Response:"""
                 if key not in data:
                     return False
             return True
-        except:
+        except Exception:
             return False
     
     def get_model_info(self) -> Dict[str, Any]:

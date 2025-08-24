@@ -12,6 +12,9 @@ from typing import Dict, List, Any, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 import random
+import logging
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class Skill:
@@ -141,7 +144,7 @@ class SkillAcquisitionEngine:
     async def practice_skill(self, skill_name: str, context: Dict[str, Any]) -> bool:
         """스킬 연습"""
         if skill_name not in self.skills_db:
-            print(f"스킬 {skill_name}을 찾을 수 없습니다.")
+            logger.warning(f"스킬 {skill_name}을 찾을 수 없습니다.")
             return False
         
         skill = self.skills_db[skill_name]
@@ -161,7 +164,7 @@ class SkillAcquisitionEngine:
         skill.practice_count += 1
         skill.last_practiced = datetime.now()
         
-        print(f"스킬 '{skill_name}' 연습 {'성공' if success else '실패'} "
+        logger.info(f"스킬 '{skill_name}' 연습 {'성공' if success else '실패'} "
               f"(성공률: {skill.success_rate:.2f})")
         
         return success
@@ -272,7 +275,7 @@ class CurriculumLearning:
         """다음 단계로 진행"""
         if self.current_stage < len(self.learning_stages):
             self.current_stage += 1
-            print(f"학습 단계 {self.current_stage}로 진행: "
+            logger.info(f"학습 단계 {self.current_stage}로 진행: "
                   f"{self.learning_stages[self.current_stage - 1]['focus']}")
 
 class DevelopmentalEngine:
@@ -285,22 +288,22 @@ class DevelopmentalEngine:
         
     async def initialize(self):
         """발달적 학습 엔진 초기화"""
-        print("Developmental Learning Engine 초기화 중...")
+        logger.info("Developmental Learning Engine 초기화 중...")
         
         # 기본 스킬들로 연습 시작
         basic_skills = ["basic_movement", "object_recognition"]
         for skill in basic_skills:
             await self.skill_engine.practice_skill(skill, {"context": "initialization"})
         
-        print("Developmental Learning Engine 초기화 완료")
+        logger.info("Developmental Learning Engine 초기화 완료")
     
     async def analyze_required_skills(self, task_plan) -> Dict[str, Any]:
         """태스크에 필요한 스킬 분석 및 준비"""
-        print("필요한 스킬 분석 중...")
+        logger.info("필요한 스킬 분석 중...")
         
         # 1. 필요한 스킬 식별
         required_skills = await self.skill_engine.assess_skill_requirements(task_plan)
-        print(f"필요한 스킬: {required_skills}")
+        logger.info(f"필요한 스킬: {required_skills}")
         
         # 2. 스킬 준비도 확인
         readiness = await self.skill_engine.check_skill_readiness(required_skills)
@@ -308,7 +311,7 @@ class DevelopmentalEngine:
         # 3. 부족한 스킬 연습
         for skill_name, is_ready in readiness.items():
             if not is_ready:
-                print(f"스킬 '{skill_name}' 집중 연습 중...")
+                logger.info(f"스킬 '{skill_name}' 집중 연습 중...")
                 for _ in range(5):  # 5회 연습
                     await self.skill_engine.practice_skill(
                         skill_name, 
@@ -334,7 +337,7 @@ class DevelopmentalEngine:
     
     async def learn_from_experience(self, execution_result):
         """실행 결과로부터 학습"""
-        print("실행 결과로부터 학습 중...")
+        logger.info("실행 결과로부터 학습 중...")
         
         # ExecutionResult 객체에서 데이터 추출
         if hasattr(execution_result, 'success'):
@@ -375,7 +378,7 @@ class DevelopmentalEngine:
                 # 실패했어도 경험은 쌓임
                 skill.success_rate = max(0.05, skill.success_rate - 0.005)
         
-        print(f"경험 학습 완료: {experience.skill_used} "
+        logger.info(f"경험 학습 완료: {experience.skill_used} "
               f"({'성공' if experience.success else '실패'})")
     
     async def autonomous_exploration(self):
@@ -383,7 +386,7 @@ class DevelopmentalEngine:
         if not self.autonomous_learning_active:
             return
             
-        print("자율적 탐색 학습 시작...")
+        logger.info("자율적 탐색 학습 시작...")
         
         # 현재 단계에 적합한 스킬들 선택
         appropriate_skills = self.skill_engine.curriculum.get_appropriate_skills(
@@ -405,7 +408,7 @@ class DevelopmentalEngine:
         if self.skill_engine.curriculum.should_advance_stage(self.skill_engine.skills_db):
             self.skill_engine.curriculum.advance_stage()
         
-        print(f"자율 탐색 완료: {target_skill} ({'성공' if success else '실패'})")
+        logger.info(f"자율 탐색 완료: {target_skill} ({'성공' if success else '실패'})")
 
 # 테스트 코드
 if __name__ == "__main__":
@@ -419,9 +422,9 @@ if __name__ == "__main__":
             await asyncio.sleep(0.1)  # 짧은 대기
         
         # 스킬 상태 출력
-        print("\n=== 최종 스킬 상태 ===")
+        logger.info("\n=== 최종 스킬 상태 ===")
         for name, skill in dev_engine.skill_engine.skills_db.items():
-            print(f"{name}: 성공률 {skill.success_rate:.2f}, "
+            logger.info(f"{name}: 성공률 {skill.success_rate:.2f}, "
                   f"연습횟수 {skill.practice_count}, "
                   f"효율성 {skill.energy_efficiency:.2f}")
     

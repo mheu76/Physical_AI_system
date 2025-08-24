@@ -113,7 +113,7 @@ class PhysicsSimulation:
             # 실제 프로젝트에서는 커스텀 URDF 파일 사용
             # self.robot_id = p.loadURDF("models/robot_arm.urdf", basePosition=[0, 0, 0])
             
-        except:
+        except Exception:
             # URDF 파일이 없으면 간단한 박스 로봇 생성
             collision_shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=[0.1, 0.1, 0.2])
             visual_shape = p.createVisualShape(p.GEOM_BOX, halfExtents=[0.1, 0.1, 0.2],
@@ -341,37 +341,11 @@ if __name__ == "__main__":
         sim_manager = SimulationManager(config)
         
         try:
-            await sim_manager.initialize(gui_mode=True)
-            
-            # 몇 가지 동작 테스트
-            print("로봇을 컵 근처로 이동...")
-            await sim_manager.execute_robot_action("move_to", {"position": [1.2, 0.2, 0.3]})
-            await asyncio.sleep(2)
-            
-            print("컵 잡기 시도...")
-            success = await sim_manager.execute_robot_action("grasp", {"target": "red_cup"})
-            print(f"잡기 {'성공' if success else '실패'}")
-            await asyncio.sleep(2)
-            
-            if success:
-                print("컵을 테이블 다른 위치로 이동...")
-                await sim_manager.execute_robot_action("move_to", {"position": [1.8, -0.2, 0.5]})
-                await asyncio.sleep(2)
-                
-                print("컵 놓기...")
-                await sim_manager.execute_robot_action("release", {"target": "red_cup"})
-                await asyncio.sleep(2)
-            
-            print("센서 데이터 조회...")
-            sensor_data = await sim_manager.get_sensor_data()
-            print(f"감지된 객체 수: {len(sensor_data.get('objects_detected', []))}")
-            
-            # 5초 더 실행
-            await asyncio.sleep(5)
-            
-        except KeyboardInterrupt:
-            print("사용자에 의해 중단됨")
-        finally:
-            sim_manager.stop()
+            # 물리 시뮬레이션 실행
+            result = await self._run_physics_simulation(mission_data)
+            return result
+        except Exception as e:
+            logger.error(f"물리 시뮬레이션 실행 실패: {e}")
+            return {"success": False, "error": str(e)}
             
     asyncio.run(simulation_example())

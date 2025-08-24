@@ -11,6 +11,9 @@ from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class SensorData:
@@ -88,10 +91,10 @@ class VisionSensor(SensorInterface):
     
     async def calibrate(self) -> bool:
         """카메라 캘리브레이션"""
-        print(f"비전 센서 {self.sensor_id} 캘리브레이션 중...")
+        logger.info(f"비전 센서 {self.sensor_id} 캘리브레이션 중...")
         await asyncio.sleep(2)  # 캘리브레이션 시간
         self.calibrated = True
-        print(f"비전 센서 {self.sensor_id} 캘리브레이션 완료")
+        logger.info(f"비전 센서 {self.sensor_id} 캘리브레이션 완료")
         return True
 
 class TactileSensor(SensorInterface):
@@ -123,10 +126,10 @@ class TactileSensor(SensorInterface):
     
     async def calibrate(self) -> bool:
         """촉각 센서 캘리브레이션"""
-        print(f"촉각 센서 {self.sensor_id} 캘리브레이션 중...")
+        logger.info(f"촉각 센서 {self.sensor_id} 캘리브레이션 중...")
         await asyncio.sleep(1)
         self.calibrated = True
-        print(f"촉각 센서 {self.sensor_id} 캘리브레이션 완료")
+        logger.info(f"촉각 센서 {self.sensor_id} 캘리브레이션 완료")
         return True
 
 class IMUSensor(SensorInterface):
@@ -165,10 +168,10 @@ class IMUSensor(SensorInterface):
     
     async def calibrate(self) -> bool:
         """IMU 캘리브레이션"""
-        print(f"IMU 센서 {self.sensor_id} 캘리브레이션 중...")
+        logger.info(f"IMU 센서 {self.sensor_id} 캘리브레이션 중...")
         await asyncio.sleep(3)  # 정적 캘리브레이션
         self.calibrated = True
-        print(f"IMU 센서 {self.sensor_id} 캘리브레이션 완료")
+        logger.info(f"IMU 센서 {self.sensor_id} 캘리브레이션 완료")
         return True
 
 class ActuatorInterface(ABC):
@@ -207,7 +210,7 @@ class ServoMotor(ActuatorInterface):
                 
                 # 관절 한계 확인
                 if not (self.joint_limits[0] <= target_position <= self.joint_limits[1]):
-                    print(f"모터 {self.motor_id}: 관절 한계 초과")
+                    logger.warning(f"모터 {self.motor_id}: 관절 한계 초과")
                     return False
                 
                 # 이동 시뮬레이션
@@ -219,15 +222,15 @@ class ServoMotor(ActuatorInterface):
                 target_velocity = np.clip(target_velocity, -self.max_velocity, self.max_velocity)
                 
                 self.current_velocity = target_velocity
-                print(f"모터 {self.motor_id}: 속도 설정 {target_velocity:.2f} rad/s")
+                logger.info(f"모터 {self.motor_id}: 속도 설정 {target_velocity:.2f} rad/s")
                 return True
                 
             else:
-                print(f"모터 {self.motor_id}: 알 수 없는 명령 {cmd_type}")
+                logger.warning(f"모터 {self.motor_id}: 알 수 없는 명령 {cmd_type}")
                 return False
                 
         except Exception as e:
-            print(f"모터 {self.motor_id}: 명령 실행 실패 - {e}")
+            logger.error(f"모터 {self.motor_id}: 명령 실행 실패 - {e}")
             return False
     
     async def _move_to_position(self, target: float, speed: float):
@@ -235,7 +238,7 @@ class ServoMotor(ActuatorInterface):
         distance = abs(target - self.current_position)
         movement_time = distance / (self.max_velocity * speed)
         
-        print(f"모터 {self.motor_id}: {self.current_position:.2f} -> {target:.2f} "
+        logger.info(f"모터 {self.motor_id}: {self.current_position:.2f} -> {target:.2f} "
               f"({movement_time:.2f}초)")
         
         # 이동 시뮬레이션
@@ -286,30 +289,30 @@ class Gripper(ActuatorInterface):
             elif cmd_type == "set_force":
                 force = params.get("force", 10.0)
                 self.grip_force = np.clip(force, 0, self.max_force)
-                print(f"그리퍼 {self.gripper_id}: 그립 강도 설정 {self.grip_force:.1f}N")
+                logger.info(f"그리퍼 {self.gripper_id}: 그립 강도 설정 {self.grip_force:.1f}N")
                 return True
                 
             else:
-                print(f"그리퍼 {self.gripper_id}: 알 수 없는 명령 {cmd_type}")
+                logger.warning(f"그리퍼 {self.gripper_id}: 알 수 없는 명령 {cmd_type}")
                 return False
                 
         except Exception as e:
-            print(f"그리퍼 {self.gripper_id}: 명령 실행 실패 - {e}")
+            logger.error(f"그리퍼 {self.gripper_id}: 명령 실행 실패 - {e}")
             return False
     
     async def _open_gripper(self):
         """그리퍼 열기"""
-        print(f"그리퍼 {self.gripper_id}: 열기")
+        logger.info(f"그리퍼 {self.gripper_id}: 열기")
         await asyncio.sleep(1)  # 동작 시간
         self.is_open = True
         self.grip_force = 0.0
         if self.object_held:
-            print(f"객체 '{self.object_held}' 해제")
+            logger.info(f"객체 '{self.object_held}' 해제")
             self.object_held = None
     
     async def _close_gripper(self, force: float, target_object: str = None) -> bool:
         """그리퍼 닫기"""
-        print(f"그리퍼 {self.gripper_id}: 닫기 (강도: {force:.1f}N)")
+        logger.info(f"그리퍼 {self.gripper_id}: 닫기 (강도: {force:.1f}N)")
         await asyncio.sleep(1)  # 동작 시간
         
         self.is_open = False
@@ -318,10 +321,10 @@ class Gripper(ActuatorInterface):
         # 객체 잡기 시뮬레이션 (80% 성공률)
         if target_object and np.random.random() < 0.8:
             self.object_held = target_object
-            print(f"객체 '{target_object}' 성공적으로 잡음")
+            logger.info(f"객체 '{target_object}' 성공적으로 잡음")
             return True
         else:
-            print("객체 잡기 실패")
+            logger.warning("객체 잡기 실패")
             return False
     
     async def get_status(self) -> Dict[str, Any]:
@@ -361,7 +364,7 @@ class SensorFusion:
                 data = await sensor.read_data()
                 sensor_readings[sensor_id] = data
             except Exception as e:
-                print(f"센서 {sensor_id} 읽기 실패: {e}")
+                logger.error(f"센서 {sensor_id} 읽기 실패: {e}")
         
         # 융합 알고리즘 적용
         return await self.fusion_algorithms[fusion_type](sensor_readings)
@@ -432,7 +435,7 @@ class HardwareManager:
         
     async def initialize(self):
         """하드웨어 매니저 초기화"""
-        print("Hardware Manager 초기화 중...")
+        logger.info("Hardware Manager 초기화 중...")
         
         # 센서 초기화
         await self._initialize_sensors()
@@ -441,7 +444,7 @@ class HardwareManager:
         await self._initialize_actuators()
         
         self.initialized = True
-        print("Hardware Manager 초기화 완료")
+        logger.info("Hardware Manager 초기화 완료")
     
     async def _initialize_sensors(self):
         """센서 초기화"""
@@ -463,7 +466,7 @@ class HardwareManager:
         self.sensor_fusion.add_sensor("body_imu", imu_sensor)
         await imu_sensor.calibrate()
         
-        print("센서 초기화 완료")
+        logger.info("센서 초기화 완료")
     
     async def _initialize_actuators(self):
         """액추에이터 초기화"""
@@ -485,12 +488,12 @@ class HardwareManager:
         gripper = Gripper("main_gripper")
         self.actuators["main_gripper"] = gripper
         
-        print("액추에이터 초기화 완료")
+        logger.info("액추에이터 초기화 완료")
     
     async def get_sensor_data(self, sensor_id: str) -> Optional[SensorData]:
         """특정 센서 데이터 읽기"""
         if sensor_id not in self.sensors:
-            print(f"센서 {sensor_id}를 찾을 수 없습니다.")
+            logger.warning(f"센서 {sensor_id}를 찾을 수 없습니다.")
             return None
         
         return await self.sensors[sensor_id].read_data()
@@ -504,7 +507,7 @@ class HardwareManager:
                              parameters: Dict[str, Any]) -> bool:
         """액추에이터 제어"""
         if actuator_id not in self.actuators:
-            print(f"액추에이터 {actuator_id}를 찾을 수 없습니다.")
+            logger.warning(f"액추에이터 {actuator_id}를 찾을 수 없습니다.")
             return False
         
         command = ActuatorCommand(
@@ -556,25 +559,25 @@ if __name__ == "__main__":
         
         # 센서 데이터 테스트
         vision_data = await hw_manager.get_sensor_data("main_camera")
-        print(f"비전 데이터: {len(vision_data.data['objects_detected'])}개 객체 감지")
+        logger.info(f"비전 데이터: {len(vision_data.data['objects_detected'])}개 객체 감지")
         
         # 융합 데이터 테스트
         object_tracking = await hw_manager.get_fused_data("object_tracking")
-        print(f"융합 데이터: {len(object_tracking['tracked_objects'])}개 객체 추적")
+        logger.info(f"융합 데이터: {len(object_tracking['tracked_objects'])}개 객체 추적")
         
         # 액추에이터 제어 테스트
         success = await hw_manager.control_actuator(
             "joint_1", "move_to_position", {"position": 1.0, "speed": 0.5}
         )
-        print(f"관절 제어: {'성공' if success else '실패'}")
+        logger.info(f"관절 제어: {'성공' if success else '실패'}")
         
         # 그리퍼 테스트
         gripper_success = await hw_manager.control_gripper("close", "test_object")
-        print(f"그리퍼 제어: {'성공' if gripper_success else '실패'}")
+        logger.info(f"그리퍼 제어: {'성공' if gripper_success else '실패'}")
         
         # 시스템 상태
         system_status = await hw_manager.get_system_status()
-        print(f"시스템 상태: {len(system_status['sensors'])}개 센서, "
+        logger.info(f"시스템 상태: {len(system_status['sensors'])}개 센서, "
               f"{len(system_status['actuators'])}개 액추에이터")
     
     asyncio.run(test())

@@ -1,0 +1,303 @@
+# Modular Physical AI System Configuration
+# Configuration file for the modularized system architecture
+
+system:
+  name: "Modular Physical AI System"
+  version: "3.0.0-modular"
+  debug: false
+  log_level: "INFO"
+  max_workers: 10
+  timeout: 30.0
+
+event_bus:
+  max_history: 1000
+  queue_size: 10000
+  enable_priority: true
+
+plugin_manager:
+  auto_discovery: true
+  plugin_dirs:
+    - "plugins"
+  enable_hot_reload: false
+
+mission_broker:
+  max_active_missions: 100
+  mission_timeout: 300.0
+  enable_priority_queue: true
+
+# Foundation Model Plugin Configuration
+foundation_model:
+  model_name: "microsoft/Phi-3.5-mini-instruct"
+  device: "auto"
+  cache_dir: "models"
+  max_length: 2048
+  temperature: 0.7
+  top_p: 0.9
+  enable_quantization: true
+  quantization_bits: 8
+  enable_smart_device_selection: true
+  system_prompt: "You are a helpful AI assistant for robotics and physical AI systems."
+  max_concurrent_requests: 5
+  request_timeout: 60.0
+
+# Developmental Learning Plugin Configuration
+developmental_learning:
+  enable_autonomous_learning: true
+  learning_rate: 1.0
+  skill_decay_rate: 0.01
+  max_skills: 100
+  experience_memory_size: 1000
+  curriculum_enabled: true
+  curriculum_stages:
+    - name: "basic_movement"
+      difficulty: 1
+      required_skills: []
+    - name: "object_interaction"
+      difficulty: 2
+      required_skills: ["basic_movement"]
+    - name: "complex_manipulation"
+      difficulty: 3
+      required_skills: ["object_interaction"]
+  autonomous_learning_interval: 30.0
+  skill_assessment_interval: 300.0
+
+# Agent Execution Plugin Configuration
+agent_execution:
+  enable_safety_monitoring: true
+  safety_check_interval: 1.0
+  emergency_stop_enabled: true
+  motion_planning_enabled: true
+  task_execution_timeout: 60.0
+  max_concurrent_tasks: 5
+  safety_parameters:
+    max_velocity: 2.0
+    max_acceleration: 1.0
+    safety_margin: 0.5
+    collision_detection_enabled: true
+    human_detection_enabled: true
+  motion_parameters:
+    planning_algorithm: "RRT"
+    max_planning_time: 10.0
+    path_smoothing_enabled: true
+    obstacle_avoidance_enabled: true
+
+# Hardware Abstraction Plugin Configuration
+hardware_abstraction:
+  enable_hardware_monitoring: true
+  monitoring_interval: 5.0
+  sensor_polling_interval: 0.1
+  actuator_command_timeout: 10.0
+  device_discovery_enabled: true
+  hardware_diagnostics_enabled: true
+  sensors:
+    temperature_sensor_01:
+      type: "temperature"
+      unit: "celsius"
+      polling_rate: 1.0
+      calibration_offset: 0.0
+    camera_01:
+      type: "camera"
+      resolution: [640, 480]
+      fps: 30
+      format: "RGB"
+    lidar_01:
+      type: "lidar"
+      range: 10.0
+      angular_resolution: 0.1
+      scan_rate: 10.0
+    imu_01:
+      type: "imu"
+      sampling_rate: 100.0
+      enable_magnetometer: true
+  actuators:
+    motor_01:
+      type: "motor"
+      max_velocity: 5.0
+      max_torque: 10.0
+      encoder_enabled: true
+    servo_01:
+      type: "servo"
+      min_angle: -90.0
+      max_angle: 90.0
+      max_velocity: 60.0
+    gripper_01:
+      type: "gripper"
+      max_force: 50.0
+      max_opening: 0.1
+
+# Simulation Configuration
+simulation:
+  enabled: true
+  physics_engine: "bullet"
+  time_step: 0.01
+  max_simulation_time: 3600.0
+  enable_visualization: true
+  visualization_fps: 30
+  environment:
+    gravity: [0, 0, -9.81]
+    ground_plane: true
+    lighting: true
+  robot_model: "ur5"
+  scene_file: "scenes/default_scene.urdf"
+
+# Database Configuration
+database:
+  enabled: true
+  type: "sqlite"
+  path: "data/system.db"
+  enable_migrations: true
+  backup_enabled: true
+  backup_interval: 86400  # 24 hours
+  tables:
+    missions:
+      enabled: true
+      retention_days: 30
+    events:
+      enabled: true
+      retention_days: 7
+    sensor_data:
+      enabled: true
+      retention_days: 90
+    learning_data:
+      enabled: true
+      retention_days: 365
+
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  metrics_collection_interval: 10.0
+  health_check_interval: 30.0
+  alerting_enabled: true
+  performance_monitoring: true
+  resource_monitoring: true
+  metrics:
+    system_uptime: true
+    plugin_status: true
+    mission_queue_size: true
+    event_processing_rate: true
+    memory_usage: true
+    cpu_usage: true
+    disk_usage: true
+  alerts:
+    plugin_failure:
+      enabled: true
+      threshold: 1
+    mission_timeout:
+      enabled: true
+      threshold: 60.0
+    high_memory_usage:
+      enabled: true
+      threshold: 80.0
+    high_cpu_usage:
+      enabled: true
+      threshold: 90.0
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  handlers:
+    console:
+      enabled: true
+      level: "INFO"
+    file:
+      enabled: true
+      level: "DEBUG"
+      filename: "logs/modular_system.log"
+      max_bytes: 10485760  # 10MB
+      backup_count: 5
+    error_file:
+      enabled: true
+      level: "ERROR"
+      filename: "logs/errors.log"
+      max_bytes: 5242880  # 5MB
+      backup_count: 3
+  loggers:
+    core:
+      level: "DEBUG"
+    plugins:
+      level: "INFO"
+    missions:
+      level: "INFO"
+    hardware:
+      level: "WARNING"
+
+# Security Configuration
+security:
+  enabled: true
+  authentication_required: false
+  authorization_enabled: false
+  api_key_required: false
+  rate_limiting:
+    enabled: true
+    max_requests_per_minute: 100
+  encryption:
+    enabled: false
+    algorithm: "AES-256"
+  access_control:
+    allowed_ips: []
+    blocked_ips: []
+  audit_logging:
+    enabled: true
+    log_level: "INFO"
+
+# Network Configuration
+network:
+  host: "localhost"
+  port: 8080
+  enable_ssl: false
+  ssl_cert_file: ""
+  ssl_key_file: ""
+  cors_enabled: true
+  allowed_origins: ["*"]
+  max_connections: 100
+  connection_timeout: 30.0
+  enable_websocket: true
+  websocket_ping_interval: 30.0
+
+# API Configuration
+api:
+  enabled: true
+  version: "v1"
+  base_path: "/api/v1"
+  documentation_enabled: true
+  swagger_ui_enabled: true
+  rate_limiting_enabled: true
+  endpoints:
+    missions:
+      enabled: true
+      methods: ["GET", "POST", "PUT", "DELETE"]
+    plugins:
+      enabled: true
+      methods: ["GET", "POST", "PUT", "DELETE"]
+    system:
+      enabled: true
+      methods: ["GET"]
+    events:
+      enabled: true
+      methods: ["GET", "POST"]
+
+# Web Interface Configuration
+web_interface:
+  enabled: true
+  static_files_path: "web_interface/static"
+  templates_path: "web_interface/templates"
+  enable_dashboard: true
+  enable_mission_control: true
+  enable_plugin_management: true
+  enable_system_monitoring: true
+  theme: "default"
+  auto_refresh: true
+  refresh_interval: 5.0
+
+# Development Configuration
+development:
+  debug_mode: false
+  hot_reload_enabled: false
+  profiling_enabled: false
+  test_mode: false
+  mock_hardware: false
+  enable_verbose_logging: false
+  development_plugins:
+    - "debug_plugin"
+    - "test_plugin"

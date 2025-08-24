@@ -1,29 +1,26 @@
 """
-sLM Foundation Model Training Module - 모델 훈련 및 파인튜닝
+SLM Training Module - 모델 훈련 시스템
 
-Physical AI 시스템을 위한 sLM Foundation Model의 
-훈련, 파인튜닝, 성능 평가를 담당하는 모듈입니다.
+PHI-3.5 기반 Physical AI 시스템의 모델 훈련 기능을 제공합니다.
+지속적 학습을 통한 모델 성능 개선 및 새로운 태스크 적응을 지원합니다.
 """
 
 import asyncio
 import json
 import torch
-import numpy as np
 import logging
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-import pickle
-import hashlib
-from torch.utils.data import Dataset, DataLoader
-from transformers import (
-    AutoTokenizer, 
-    AutoModelForCausalLM,
-    TrainingArguments,
-    Trainer,
-    DataCollatorForLanguageModeling
-)
+import numpy as np
+
+# 상대 임포트를 절대 임포트로 변경 (독립 실행을 위해)
+try:
+    from .phi35_integration import PHI35ModelManager
+except ImportError:
+    # 독립 실행 시 절대 임포트 사용
+    from phi35_integration import PHI35ModelManager
 
 logger = logging.getLogger(__name__)
 

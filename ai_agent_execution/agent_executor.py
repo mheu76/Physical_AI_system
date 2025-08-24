@@ -11,6 +11,9 @@ from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 import time
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class ExecutionResult:
@@ -35,7 +38,7 @@ class MotionController:
     async def execute_motion(self, target_position: np.ndarray, 
                            speed_factor: float = 1.0) -> bool:
         """동작 실행"""
-        print(f"동작 실행: {self.current_position} -> {target_position}")
+        logger.info(f"동작 실행: {self.current_position} -> {target_position}")
         
         # 경로 계획
         path = self._plan_trajectory(target_position)
@@ -45,7 +48,7 @@ class MotionController:
             await self._move_to_waypoint(waypoint, speed_factor)
             await asyncio.sleep(0.1)  # 물리적 시간 지연
             
-        print(f"동작 완료: 현재 위치 {self.current_position}")
+        logger.info(f"동작 완료: 현재 위치 {self.current_position}")
         return True
     
     def _plan_trajectory(self, target: np.ndarray, num_waypoints: int = 10) -> List[np.ndarray]:
@@ -121,7 +124,7 @@ class SafetyMonitor:
     def trigger_emergency_stop(self):
         """비상 정지 트리거"""
         self.emergency_stop = True
-        print("⚠️ 비상 정지 활성화!")
+        logger.warning("⚠️ 비상 정지 활성화!")
 
 class AgentExecutor:
     """AI Agent 실행기 메인 클래스"""
@@ -134,17 +137,17 @@ class AgentExecutor:
         
     async def initialize(self, hardware_manager):
         """Agent Executor 초기화"""
-        print("AI Agent Executor 초기화 중...")
+        logger.info("AI Agent Executor 초기화 중...")
         self.hw_manager = hardware_manager
         
         # 안전 모니터링 백그라운드 태스크 시작
         asyncio.create_task(self._safety_monitoring_loop())
         
-        print("AI Agent Executor 초기화 완료")
+        logger.info("AI Agent Executor 초기화 완료")
     
     async def execute(self, task_plan, skill_states: Dict[str, Any]) -> ExecutionResult:
         """태스크 계획 실행"""
-        print(f"태스크 실행 시작: {task_plan.mission}")
+        logger.info(f"태스크 실행 시작: {task_plan.mission}")
         
         start_time = time.time()
         actions_performed = []
@@ -155,7 +158,7 @@ class AgentExecutor:
         try:
             # 각 서브태스크 순차 실행
             for i, subtask in enumerate(task_plan.subtasks):
-                print(f"서브태스크 {i+1}/{len(task_plan.subtasks)}: {subtask['action']}")
+                logger.info(f"서브태스크 {i+1}/{len(task_plan.subtasks)}: {subtask['action']}")
                 
                 # 안전 확인
                 safety_status = await self.safety_monitor.monitor_safety()
@@ -207,7 +210,7 @@ class AgentExecutor:
             learning_value=learning_value
         )
         
-        print(f"태스크 실행 완료: {'성공' if success else '실패'} "
+        logger.info(f"태스크 실행 완료: {'성공' if success else '실패'} "
               f"({execution_time:.2f}초)")
         
         return result
@@ -226,7 +229,7 @@ class AgentExecutor:
                 
             elif action == "grasp":
                 # 잡기 동작
-                print(f"객체 '{target}' 잡기 시도")
+                logger.info(f"객체 '{target}' 잡기 시도")
                 # 하드웨어 그리퍼 제어
                 if self.hw_manager:
                     return await self.hw_manager.control_gripper("close", target)
@@ -234,14 +237,14 @@ class AgentExecutor:
                 
             elif action == "place":
                 # 놓기 동작
-                print(f"객체를 '{target}'에 놓기")
+                logger.info(f"객체를 '{target}'에 놓기")
                 if self.hw_manager:
                     return await self.hw_manager.control_gripper("open", target)
                 return True
                 
             elif action == "explore" or action == "explore_environment":
                 # 탐색 동작
-                print(f"'{target}' 탐색 중")
+                logger.info(f"'{target}' 탐색 중")
                 # 랜덤 위치들을 방문하며 탐색
                 for _ in range(3):
                     random_pos = np.random.uniform(-1, 1, 3)
@@ -249,11 +252,11 @@ class AgentExecutor:
                 return True
                 
             else:
-                print(f"알 수 없는 동작: {action}")
+                logger.warning(f"알 수 없는 동작: {action}")
                 return False
                 
         except Exception as e:
-            print(f"서브태스크 실행 오류: {e}")
+            logger.error(f"서브태스크 실행 오류: {e}")
             return False
     
     def _resolve_target_position(self, target: str) -> np.ndarray:
@@ -306,7 +309,7 @@ class AgentExecutor:
                 safety_status = await self.safety_monitor.monitor_safety()
                 
                 if not safety_status["safe"]:
-                    print(f"⚠️ 안전 경고: {safety_status['violations']}")
+                    logger.warning(f"⚠️ 안전 경고: {safety_status['violations']}")
                     self.safety_monitor.trigger_emergency_stop()
                     self.execution_active = False
                     
@@ -341,11 +344,11 @@ if __name__ == "__main__":
         
         result = await executor.execute(fake_plan, skill_states)
         
-        print(f"\n=== 실행 결과 ===")
-        print(f"성공: {result.success}")
-        print(f"실행 시간: {result.execution_time:.2f}초")
-        print(f"수행 동작: {len(result.actions_performed)}개")
-        print(f"오류: {len(result.errors)}개")
-        print(f"학습 가치: {result.learning_value:.2f}")
+        logger.info(f"\n=== 실행 결과 ===")
+        logger.info(f"성공: {result.success}")
+        logger.info(f"실행 시간: {result.execution_time:.2f}초")
+        logger.info(f"수행 동작: {len(result.actions_performed)}개")
+        logger.info(f"오류: {len(result.errors)}개")
+        logger.info(f"학습 가치: {result.learning_value:.2f}")
     
     asyncio.run(test())

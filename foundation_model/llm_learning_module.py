@@ -17,7 +17,12 @@ from pathlib import Path
 import pickle
 import hashlib
 
-from .phi35_integration import PHI35ModelManager
+# 상대 임포트를 절대 임포트로 변경 (독립 실행을 위해)
+try:
+    from .phi35_integration import PHI35ModelManager
+except ImportError:
+    # 독립 실행 시 절대 임포트 사용
+    from phi35_integration import PHI35ModelManager
 
 logger = logging.getLogger(__name__)
 

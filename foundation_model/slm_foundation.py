@@ -13,9 +13,16 @@ from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime
 
-from .phi35_integration import PHI35ModelManager
-from .llm_learning_module import LLMLearningModule
-from .slm_training_module import SLMTrainingModule, TrainingConfig, TrainingExample
+# 상대 임포트를 절대 임포트로 변경 (독립 실행을 위해)
+try:
+    from .phi35_integration import PHI35ModelManager
+    from .llm_learning_module import LLMLearningModule
+    from .slm_training_module import SLMTrainingModule, TrainingConfig, TrainingExample
+except ImportError:
+    # 독립 실행 시 절대 임포트 사용
+    from phi35_integration import PHI35ModelManager
+    from llm_learning_module import LLMLearningModule
+    from slm_training_module import SLMTrainingModule, TrainingConfig, TrainingExample
 
 logger = logging.getLogger(__name__)
 
@@ -111,15 +118,15 @@ class TaskPlanningModule:
                 total_time = self.performance_metrics["average_response_time"] * (self.performance_metrics["missions_processed"] - 1)
                 self.performance_metrics["average_response_time"] = (total_time + elapsed_time) / self.performance_metrics["missions_processed"]
                 
-                print(f"🎯 PHI-3.5 미션 분해 완료: {len(subtasks)}개 서브태스크 ({elapsed_time:.2f}초)")
+                logger.info(f"🎯 PHI-3.5 미션 분해 완료: {len(subtasks)}개 서브태스크 ({elapsed_time:.2f}초)")
                 return subtasks
             else:
                 # PHI-3.5가 없는 경우 폴백 구현
-                print("⚠️  PHI-3.5 없음, 폴백 모드 사용")
+                logger.warning("⚠️  PHI-3.5 없음, 폴백 모드 사용")
                 return await self._fallback_mission_decomposition(mission)
                 
         except Exception as e:
-            print(f"❌ PHI-3.5 미션 분해 실패: {e}")
+            logger.error(f"❌ PHI-3.5 미션 분해 실패: {e}")
             return await self._fallback_mission_decomposition(mission)
     
     async def _fallback_mission_decomposition(self, mission: str) -> List[Dict[str, Any]]:
@@ -292,7 +299,7 @@ class SLMFoundation:
     
     async def initialize(self):
         """Foundation Model 초기화 - PHI-3.5 내장 + 훈련 모듈"""
-        print("🧠 PHI-3.5 Foundation Model 초기화 중...")
+        logger.info("🧠 PHI-3.5 Foundation Model 초기화 중...")
         
         try:
             if self.model_type == "phi35":
@@ -303,7 +310,7 @@ class SLMFoundation:
                 device = self.model_config.get("device", "auto")
                 cache_dir = self.model_config.get("cache_dir", None)
                 
-                print(f"🔧 PHI-3.5 설정: {model_name} on {device}")
+                logger.info(f"🔧 PHI-3.5 설정: {model_name} on {device}")
                 
                 # PHI-3.5 생성 및 초기화
                 self.phi35_ai = create_phi35_physical_ai(
@@ -315,7 +322,7 @@ class SLMFoundation:
                 # 초기화 실행
                 success = await self.phi35_ai.initialize()
                 if success:
-                    print("✅ PHI-3.5 초기화 완료")
+                    logger.info("✅ PHI-3.5 초기화 완료")
                     
                     # TaskPlanningModule에 PHI-3.5 연결
                     self.task_planner.phi35_ai = self.phi35_ai
@@ -340,24 +347,24 @@ class SLMFoundation:
                     self.performance_metrics["model_info"] = self.phi35_ai.model_manager.get_model_info()
                     
                 else:
-                    print("❌ PHI-3.5 초기화 실패")
+                    logger.error("❌ PHI-3.5 초기화 실패")
                     raise Exception("PHI-3.5 initialization failed")
                     
             else:
-                print(f"❌ 지원하지 않는 모델 타입: {self.model_type}")
+                logger.error(f"❌ 지원하지 않는 모델 타입: {self.model_type}")
                 raise Exception(f"Unsupported model type: {self.model_type}")
                 
         except Exception as e:
-            print(f"❌ Foundation Model 초기화 실패: {e}")
-            print("⚠️  폴백 모드로 계속 진행합니다 (PHI-3.5 없이)")
+            logger.error(f"❌ Foundation Model 초기화 실패: {e}")
+            logger.warning("⚠️  폴백 모드로 계속 진행합니다 (PHI-3.5 없이)")
             self.phi35_ai = None
         
-        print("🎯 sLM Foundation Model 초기화 완료")
+        logger.info("🎯 sLM Foundation Model 초기화 완료")
         return True
     
     async def interpret_mission(self, mission: str) -> TaskPlan:
         """미션 해석 및 계획 수립"""
-        print(f"미션 해석 중: {mission}")
+        logger.info(f"미션 해석 중: {mission}")
         
         # 1. 미션을 서브태스크로 분해
         subtasks = await self.task_planner.decompose_mission(mission)
@@ -379,7 +386,7 @@ class SLMFoundation:
             success_criteria=success_criteria
         )
         
-        print(f"태스크 계획 생성 완료: {len(optimized_tasks)}개 서브태스크")
+        logger.info(f"태스크 계획 생성 완료: {len(optimized_tasks)}개 서브태스크")
         return task_plan
     
     def _analyze_constraints(self, mission: str, tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -506,15 +513,15 @@ class SLMFoundation:
         if not self.training_module:
             return {"success": False, "error": "훈련 모듈이 초기화되지 않았습니다."}
         
-        print("🚀 sLM Foundation Model 훈련 시작")
+        logger.info("🚀 sLM Foundation Model 훈련 시작")
         result = await self.training_module.train_model(resume_from_checkpoint)
         
         if result["success"]:
             # 훈련 메트릭 업데이트
             self.performance_metrics["training_metrics"] = await self.training_module.get_training_status()
-            print("✅ 모델 훈련 완료")
+            logger.info("✅ 모델 훈련 완료")
         else:
-            print(f"❌ 모델 훈련 실패: {result.get('error', 'Unknown error')}")
+            logger.error(f"❌ 모델 훈련 실패: {result.get('error', 'Unknown error')}")
         
         return result
     
@@ -523,13 +530,13 @@ class SLMFoundation:
         if not self.training_module:
             return {"success": False, "error": "훈련 모듈이 초기화되지 않았습니다."}
         
-        print("🔍 모델 성능 평가 시작")
+        logger.info("🔍 모델 성능 평가 시작")
         result = await self.training_module.evaluate_model(test_examples)
         
         if result["success"]:
-            print(f"📊 평가 결과: 정확도 {result['accuracy']:.3f}")
+            logger.info(f"📊 평가 결과: 정확도 {result['accuracy']:.3f}")
         else:
-            print(f"❌ 평가 실패: {result.get('error', 'Unknown error')}")
+            logger.error(f"❌ 평가 실패: {result.get('error', 'Unknown error')}")
         
         return result
     
@@ -545,13 +552,13 @@ class SLMFoundation:
         if not self.training_module:
             return {"success": False, "error": "훈련 모듈이 초기화되지 않았습니다."}
         
-        print("💾 훈련된 모델 내보내기 시작")
+        logger.info("💾 훈련된 모델 내보내기 시작")
         result = await self.training_module.export_model(export_path)
         
         if result["success"]:
-            print(f"✅ 모델 내보내기 완료: {result['export_path']}")
+            logger.info(f"✅ 모델 내보내기 완료: {result['export_path']}")
         else:
-            print(f"❌ 모델 내보내기 실패: {result.get('error', 'Unknown error')}")
+            logger.error(f"❌ 모델 내보내기 실패: {result.get('error', 'Unknown error')}")
         
         return result
     
@@ -597,7 +604,7 @@ class SLMFoundation:
 if __name__ == "__main__":
     async def test_slm_foundation():
         """sLM Foundation Model 테스트"""
-        print("🧠 sLM Foundation Model 테스트")
+        logger.info("🧠 sLM Foundation Model 테스트")
         
         # Foundation Model 초기화
         foundation = SLMFoundation(
@@ -621,29 +628,29 @@ if __name__ == "__main__":
             ]
             
             for mission in test_missions:
-                print(f"\n📋 미션 처리: {mission}")
+                logger.info(f"\n📋 미션 처리: {mission}")
                 result = await foundation.process_mission_with_learning(
                     mission=mission,
                     context={"environment": "simple", "safety_level": "normal"}
                 )
                 
                 if result['success']:
-                    print(f"✅ 처리 완료: {len(result['subtasks'])}개 서브태스크")
-                    print(f"📊 학습 가치: {result['learning_value']:.3f}")
+                    logger.info(f"✅ 처리 완료: {len(result['subtasks'])}개 서브태스크")
+                    logger.info(f"📊 학습 가치: {result['learning_value']:.3f}")
                 else:
-                    print(f"❌ 처리 실패: {result.get('error', 'Unknown error')}")
+                    logger.error(f"❌ 처리 실패: {result.get('error', 'Unknown error')}")
             
             # 훈련 상태 확인
             training_status = await foundation.get_training_status()
-            print(f"\n📊 훈련 상태: {training_status}")
+            logger.info(f"\n📊 훈련 상태: {training_status}")
             
             # 학습 인사이트 확인
             insights = await foundation.get_learning_insights()
-            print(f"\n🧠 학습 인사이트: {insights}")
+            logger.info(f"\n🧠 학습 인사이트: {insights}")
             
         except Exception as e:
-            print(f"❌ 테스트 실패: {e}")
+            logger.error(f"❌ 테스트 실패: {e}")
         
-        print("✅ sLM Foundation Model 테스트 완료")
+        logger.info("✅ sLM Foundation Model 테스트 완료")
     
     asyncio.run(test_slm_foundation())
