@@ -9,6 +9,7 @@ import argparse
 import asyncio
 import logging
 from pathlib import Path
+from datetime import datetime
 
 from foundation_model.slm_foundation import SLMFoundation
 from developmental_learning.dev_engine import DevelopmentalEngine
@@ -112,22 +113,69 @@ class PhysicalAI:
             raise
     
     async def execute_mission(self, mission: str):
-        """미션 실행 메인 루프"""
+        """미션 실행 메인 루프 (LLM 학습 모듈 포함)"""
         logger.info(f"미션 수행: {mission}")
         
-        # 1. Foundation Model이 미션 해석 및 계획 수립
-        task_plan = await self.slm_foundation.interpret_mission(mission)
-        
-        # 2. Developmental Engine이 필요한 스킬 확인/학습
-        required_skills = await self.dev_engine.analyze_required_skills(task_plan)
-        
-        # 3. Agent Executor가 실제 물리적 실행
-        execution_result = await self.agent_executor.execute(task_plan, required_skills)
-        
-        # 4. 실행 결과를 Developmental Engine에 피드백
-        await self.dev_engine.learn_from_experience(execution_result)
-        
-        return execution_result
+        try:
+            # 1. LLM 학습이 포함된 미션 처리
+            context = {
+                "environment": "simulation",
+                "safety_level": "normal",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            learning_result = await self.slm_foundation.process_mission_with_learning(
+                mission=mission,
+                context=context
+            )
+            
+            if not learning_result['success']:
+                logger.error(f"LLM 학습 모듈 처리 실패: {learning_result.get('error', 'Unknown error')}")
+                return learning_result
+            
+            # 2. Foundation Model이 미션 해석 및 계획 수립
+            task_plan = await self.slm_foundation.interpret_mission(mission)
+            
+            # 3. Developmental Engine이 필요한 스킬 확인/학습
+            required_skills = await self.dev_engine.analyze_required_skills(task_plan)
+            
+            # 4. Agent Executor가 실제 물리적 실행
+            execution_result = await self.agent_executor.execute(task_plan, required_skills)
+            
+            # 5. 실행 결과를 Developmental Engine에 피드백
+            await self.dev_engine.learn_from_experience(execution_result)
+            
+            # 6. 종합 결과 반환
+            return {
+                "success": execution_result.success and learning_result['success'],
+                "mission": mission,
+                "execution_time": execution_result.execution_time,
+                "actions_performed": execution_result.actions_performed,
+                "errors": execution_result.errors + learning_result.get('errors', []),
+                "performance_metrics": execution_result.performance_metrics,
+                "learning_value": execution_result.learning_value + learning_result['learning_value'],
+                "llm_learning_insights": learning_result.get('performance_metrics', {}).get('learning_metrics', {})
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ 미션 실행 실패: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def get_learning_insights(self):
+        """학습 인사이트 조회"""
+        insights = {
+            "developmental_learning": await self.dev_engine.get_learning_progress(),
+            "llm_learning": await self.slm_foundation.get_learning_insights()
+        }
+        return insights
+    
+    async def optimize_learning_strategy(self):
+        """학습 전략 최적화"""
+        optimization = {
+            "developmental_learning": await self.dev_engine.optimize_curriculum(),
+            "llm_learning": await self.slm_foundation.optimize_learning_strategy()
+        }
+        return optimization
     
     async def developmental_learning_cycle(self):
         """지속적인 발달적 학습 사이클"""

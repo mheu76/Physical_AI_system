@@ -3,12 +3,21 @@ sLM Foundation Model - 미션 해석 및 동작 로직 추론
 
 이 모듈은 자연어 미션을 받아서 구체적인 동작 계획으로 
 변환하는 핵심 추론 엔진입니다.
+LLM Foundation 학습 모듈과 훈련 모듈이 통합되어 지속적 개선이 가능합니다.
 """
 
 import asyncio
 import json
-from typing import Dict, List, Any
+import logging
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
+from datetime import datetime
+
+from .phi35_integration import PHI35ModelManager
+from .llm_learning_module import LLMLearningModule
+from .slm_training_module import SLMTrainingModule, TrainingConfig, TrainingExample
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class TaskPlan:
@@ -34,6 +43,12 @@ class TaskPlanningModule:
     def __init__(self):
         self.motion_primitives = self._load_motion_primitives()
         self.physics_rules = self._load_physics_knowledge()
+        self.phi35_ai = None  # PHI-3.5 AI 인터페이스
+        self.performance_metrics = {
+            "missions_processed": 0,
+            "successful_decompositions": 0,
+            "average_response_time": 0.0
+        }
     
     def _load_motion_primitives(self) -> List[MotionPrimitive]:
         """기본 동작 단위들을 로드"""
@@ -108,28 +123,31 @@ class TaskPlanningModule:
             return await self._fallback_mission_decomposition(mission)
     
     async def _fallback_mission_decomposition(self, mission: str) -> List[Dict[str, Any]]:
-        """LLM 실패시 폴백 미션 분해"""
-        if "pick up" in mission.lower() and "place" in mission.lower():
+        """폴백 미션 분해 (PHI-3.5 없을 때)"""
+        mission_lower = mission.lower()
+        
+        # 간단한 키워드 기반 분해
+        if "pick" in mission_lower and "place" in mission_lower:
             return [
                 {
                     "type": "navigation",
                     "action": "move_to",
                     "target": "object_location",
                     "priority": 1,
-                    "preconditions": ["path_clear"],
-                    "postconditions": ["at_object_location"],
+                    "preconditions": ["robot_ready"],
+                    "postconditions": ["at_object"],
                     "estimated_duration": 10.0,
                     "difficulty": 2
                 },
                 {
                     "type": "manipulation",
                     "action": "grasp",
-                    "target": "target_object",
+                    "target": "object",
                     "priority": 2,
-                    "preconditions": ["object_reachable", "gripper_open"],
+                    "preconditions": ["at_object", "object_visible"],
                     "postconditions": ["object_grasped"],
                     "estimated_duration": 5.0,
-                    "difficulty": 4
+                    "difficulty": 3
                 },
                 {
                     "type": "navigation",
@@ -137,19 +155,19 @@ class TaskPlanningModule:
                     "target": "destination",
                     "priority": 3,
                     "preconditions": ["object_grasped"],
-                    "postconditions": ["at_destination"], 
+                    "postconditions": ["at_destination"],
                     "estimated_duration": 10.0,
                     "difficulty": 2
                 },
                 {
                     "type": "manipulation",
                     "action": "place",
-                    "target": "destination_surface",
+                    "target": "surface",
                     "priority": 4,
                     "preconditions": ["at_destination", "object_grasped"],
                     "postconditions": ["object_placed"],
                     "estimated_duration": 3.0,
-                    "difficulty": 3
+                    "difficulty": 2
                 }
             ]
         
@@ -171,73 +189,84 @@ class MotionReasoningModule:
     """동작 추론 모듈"""
     
     def __init__(self):
-        self.energy_optimizer = EnergyOptimizer()
-        self.physics_simulator = PhysicsSimulator()
+        self.motion_patterns = self._load_motion_patterns()
+        self.optimization_rules = self._load_optimization_rules()
+    
+    def _load_motion_patterns(self) -> Dict[str, Any]:
+        """동작 패턴 로드"""
+        return {
+            "pick_and_place": {
+                "sequence": ["approach", "grasp", "lift", "move", "place"],
+                "energy_optimization": True,
+                "safety_checks": ["collision_detection", "force_monitoring"]
+            },
+            "exploration": {
+                "sequence": ["scan", "move", "scan", "move"],
+                "energy_optimization": False,
+                "safety_checks": ["obstacle_detection"]
+            }
+        }
+    
+    def _load_optimization_rules(self) -> Dict[str, Any]:
+        """최적화 규칙 로드"""
+        return {
+            "energy_efficiency": {
+                "minimize_distance": True,
+                "smooth_trajectories": True,
+                "optimal_speed": True
+            },
+            "safety": {
+                "maintain_distance": 0.1,
+                "slow_approach": True,
+                "emergency_stop": True
+            }
+        }
     
     async def optimize_motion_sequence(self, subtasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """동작 시퀀스 최적화"""
-        optimized_sequence = []
+        optimized_tasks = []
         
-        for task in subtasks:
-            # 에너지 효율성 고려
-            energy_cost = await self.energy_optimizer.calculate_cost(task)
+        for i, task in enumerate(subtasks):
+            optimized_task = task.copy()
             
-            # 물리적 제약 검증
-            feasible = await self.physics_simulator.validate_motion(task)
+            # 에너지 최적화
+            if self._should_optimize_energy(task):
+                optimized_task["energy_efficient"] = True
+                optimized_task["speed_factor"] = 0.8  # 안전을 위해 속도 조절
             
-            if feasible:
-                task["energy_cost"] = energy_cost
-                task["validated"] = True
-                optimized_sequence.append(task)
-            else:
-                # 대안 동작 생성
-                alternative = await self._generate_alternative(task)
-                optimized_sequence.append(alternative)
+            # 안전 최적화
+            if self._should_apply_safety(task):
+                optimized_task["safety_checks"] = self._get_safety_checks(task)
+            
+            # 순서 최적화
+            optimized_task["priority"] = i + 1
+            
+            optimized_tasks.append(optimized_task)
         
-        return optimized_sequence
+        return optimized_tasks
     
-    async def _generate_alternative(self, failed_task: Dict[str, Any]) -> Dict[str, Any]:
-        """실패한 태스크에 대한 대안 생성"""
-        # 더 안전하고 확실한 대안 동작 생성
-        return {
-            **failed_task,
-            "modified": True,
-            "safety_margin": 1.5,
-            "speed_reduction": 0.7
-        }
-
-class EnergyOptimizer:
-    """에너지 효율성 최적화"""
+    def _should_optimize_energy(self, task: Dict[str, Any]) -> bool:
+        """에너지 최적화 여부 판단"""
+        action = task.get("action", "")
+        return action in ["move_to", "grasp", "place"]
     
-    async def calculate_cost(self, task: Dict[str, Any]) -> float:
-        """태스크의 에너지 비용 계산"""
-        base_cost = {
-            "move_to": 1.0,
-            "grasp": 0.5,
-            "place": 0.3,
-            "explore": 2.0
-        }.get(task.get("action", "unknown"), 1.0)
-        
-        # 거리, 속도, 부하 등을 고려한 동적 계산
-        # 여기서는 단순화된 버전
-        return base_cost
-
-class PhysicsSimulator:
-    """물리 법칙 기반 동작 검증"""
+    def _should_apply_safety(self, task: Dict[str, Any]) -> bool:
+        """안전 적용 여부 판단"""
+        return True  # 모든 태스크에 안전 적용
     
-    async def validate_motion(self, task: Dict[str, Any]) -> bool:
-        """물리적 실현 가능성 검증"""
-        # 실제로는 물리 엔진을 사용한 시뮬레이션
-        # 관절 한계, 충돌, 안정성 등 검증
-        
-        # 여기서는 기본적인 검증만 수행
+    def _get_safety_checks(self, task: Dict[str, Any]) -> List[str]:
+        """안전 검사 항목 반환"""
         action = task.get("action", "")
         
-        # 기본 동작들은 대부분 실현 가능하다고 가정
-        return action in ["move_to", "grasp", "place", "explore"]
+        if action == "grasp":
+            return ["force_monitoring", "collision_detection", "object_stability"]
+        elif action == "move_to":
+            return ["path_clearance", "obstacle_detection", "speed_monitoring"]
+        else:
+            return ["general_safety"]
 
 class SLMFoundation:
-    """sLM Foundation Model 메인 클래스 - PHI-3.5 내장"""
+    """sLM Foundation Model 메인 클래스 - PHI-3.5 내장 + LLM 학습 모듈 + 훈련 모듈"""
     
     def __init__(self, model_type: str = "phi35", **model_config):
         self.task_planner = TaskPlanningModule()
@@ -248,17 +277,21 @@ class SLMFoundation:
         self.model_type = model_type
         self.model_config = model_config
         self.phi35_ai = None
+        self.llm_learning = None
+        self.training_module = None  # 훈련 모듈 추가
         
         # 성능 메트릭
         self.performance_metrics = {
             "missions_processed": 0,
             "successful_decompositions": 0,
             "average_response_time": 0.0,
-            "model_info": {}
+            "model_info": {},
+            "learning_metrics": {},
+            "training_metrics": {}  # 훈련 메트릭 추가
         }
     
     async def initialize(self):
-        """Foundation Model 초기화 - PHI-3.5 내장"""
+        """Foundation Model 초기화 - PHI-3.5 내장 + 훈련 모듈"""
         print("🧠 PHI-3.5 Foundation Model 초기화 중...")
         
         try:
@@ -287,6 +320,22 @@ class SLMFoundation:
                     # TaskPlanningModule에 PHI-3.5 연결
                     self.task_planner.phi35_ai = self.phi35_ai
                     
+                    # LLM 학습 모듈 초기화
+                    learning_config = self.model_config.get("learning_config", {})
+                    self.llm_learning = LLMLearningModule(self.phi35_ai.model_manager, learning_config)
+                    await self.llm_learning.initialize()
+                    
+                    # 훈련 모듈 초기화
+                    training_config = TrainingConfig(
+                        model_name=model_name,
+                        output_dir=self.model_config.get("training_output_dir", "models/slm_foundation"),
+                        num_epochs=self.model_config.get("num_epochs", 3),
+                        batch_size=self.model_config.get("batch_size", 4),
+                        learning_rate=self.model_config.get("learning_rate", 5e-5)
+                    )
+                    self.training_module = SLMTrainingModule(self.phi35_ai.model_manager, training_config)
+                    await self.training_module.initialize()
+                    
                     # 모델 정보 저장
                     self.performance_metrics["model_info"] = self.phi35_ai.model_manager.get_model_info()
                     
@@ -304,6 +353,7 @@ class SLMFoundation:
             self.phi35_ai = None
         
         print("🎯 sLM Foundation Model 초기화 완료")
+        return True
     
     async def interpret_mission(self, mission: str) -> TaskPlan:
         """미션 해석 및 계획 수립"""
@@ -344,42 +394,256 @@ class SLMFoundation:
     
     def _define_success_criteria(self, mission: str) -> List[str]:
         """성공 기준 정의"""
-        return [
-            "task_completion",
-            "no_collisions",
-            "within_time_limit",
-            "energy_efficient"
-        ]
+        mission_lower = mission.lower()
+        
+        if "pick" in mission_lower and "place" in mission_lower:
+            return ["object_picked", "object_placed", "mission_completed"]
+        elif "organize" in mission_lower:
+            return ["items_organized", "space_neat", "mission_completed"]
+        elif "clean" in mission_lower:
+            return ["area_cleaned", "items_sorted", "mission_completed"]
+        else:
+            return ["mission_completed"]
     
     def _estimate_duration(self, tasks: List[Dict[str, Any]]) -> float:
-        """실행 시간 추정"""
-        base_durations = {
-            "move_to": 10.0,
-            "grasp": 5.0,
-            "place": 3.0,
-            "explore": 30.0
+        """예상 소요 시간 계산"""
+        total_duration = 0.0
+        
+        for task in tasks:
+            duration = task.get("estimated_duration", 10.0)
+            total_duration += duration
+        
+        # 안전 마진 추가 (20%)
+        return total_duration * 1.2
+    
+    async def process_mission_with_learning(self, 
+                                          mission: str, 
+                                          context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """학습이 포함된 미션 처리"""
+        if context is None:
+            context = {}
+        
+        try:
+            # 1. 미션 분해
+            subtasks = await self.task_planner.decompose_mission(mission)
+            
+            # 2. 동작 최적화
+            optimized_plan = await self.motion_reasoner.optimize_motion_sequence(subtasks)
+            
+            # 3. 실행 결과 시뮬레이션 (실제로는 Agent Executor에서 실행)
+            execution_result = await self._simulate_execution(optimized_plan, context)
+            
+            # 4. 학습 수행
+            learning_value = 0.0
+            if self.llm_learning:
+                learning_value = await self.llm_learning.learn_from_experience(
+                    mission=mission,
+                    context=context,
+                    generated_plan={"subtasks": optimized_plan},
+                    execution_result=execution_result
+                )
+                
+                # 학습 메트릭 업데이트
+                self.performance_metrics["learning_metrics"] = await self.llm_learning.get_learning_insights()
+            
+            # 5. 훈련 예제 추가
+            if self.training_module:
+                training_example = TrainingExample(
+                    mission=mission,
+                    context=context,
+                    subtasks=optimized_plan,
+                    constraints=self._analyze_constraints(mission, optimized_plan),
+                    success_criteria=self._define_success_criteria(mission),
+                    execution_result=execution_result,
+                    learning_value=learning_value
+                )
+                await self.training_module.add_training_example(training_example)
+            
+            return {
+                "success": True,
+                "mission": mission,
+                "subtasks": subtasks,
+                "optimized_plan": optimized_plan,
+                "execution_result": execution_result,
+                "learning_value": learning_value,
+                "performance_metrics": self.performance_metrics
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ 미션 처리 실패: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "mission": mission
+            }
+    
+    async def _simulate_execution(self, plan: List[Dict[str, Any]], context: Dict[str, Any]) -> Dict[str, Any]:
+        """실행 결과 시뮬레이션"""
+        import random
+        
+        # 시뮬레이션된 실행 결과
+        success = random.random() > 0.1  # 90% 성공률
+        execution_time = sum(task.get("estimated_duration", 10.0) for task in plan)
+        
+        # 성능 메트릭 시뮬레이션
+        performance_metrics = {
+            "efficiency": random.uniform(0.6, 0.9),
+            "accuracy": random.uniform(0.7, 0.95),
+            "safety_score": random.uniform(0.8, 1.0),
+            "energy_consumption": execution_time * random.uniform(0.5, 1.5)
         }
         
-        total_duration = sum(
-            base_durations.get(task.get("action", "unknown"), 15.0)
-            for task in tasks
-        )
+        return {
+            "success": success,
+            "execution_time": execution_time,
+            "performance_metrics": performance_metrics,
+            "errors": [] if success else ["simulated_error"]
+        }
+    
+    # 훈련 관련 메서드들 추가
+    async def train_model(self, resume_from_checkpoint: bool = False) -> Dict[str, Any]:
+        """모델 훈련 실행"""
+        if not self.training_module:
+            return {"success": False, "error": "훈련 모듈이 초기화되지 않았습니다."}
         
-        return total_duration
+        print("🚀 sLM Foundation Model 훈련 시작")
+        result = await self.training_module.train_model(resume_from_checkpoint)
+        
+        if result["success"]:
+            # 훈련 메트릭 업데이트
+            self.performance_metrics["training_metrics"] = await self.training_module.get_training_status()
+            print("✅ 모델 훈련 완료")
+        else:
+            print(f"❌ 모델 훈련 실패: {result.get('error', 'Unknown error')}")
+        
+        return result
+    
+    async def evaluate_model(self, test_examples: List[TrainingExample] = None) -> Dict[str, Any]:
+        """모델 성능 평가"""
+        if not self.training_module:
+            return {"success": False, "error": "훈련 모듈이 초기화되지 않았습니다."}
+        
+        print("🔍 모델 성능 평가 시작")
+        result = await self.training_module.evaluate_model(test_examples)
+        
+        if result["success"]:
+            print(f"📊 평가 결과: 정확도 {result['accuracy']:.3f}")
+        else:
+            print(f"❌ 평가 실패: {result.get('error', 'Unknown error')}")
+        
+        return result
+    
+    async def get_training_status(self) -> Dict[str, Any]:
+        """훈련 상태 조회"""
+        if not self.training_module:
+            return {"error": "훈련 모듈이 초기화되지 않았습니다."}
+        
+        return await self.training_module.get_training_status()
+    
+    async def export_trained_model(self, export_path: str = None) -> Dict[str, Any]:
+        """훈련된 모델 내보내기"""
+        if not self.training_module:
+            return {"success": False, "error": "훈련 모듈이 초기화되지 않았습니다."}
+        
+        print("💾 훈련된 모델 내보내기 시작")
+        result = await self.training_module.export_model(export_path)
+        
+        if result["success"]:
+            print(f"✅ 모델 내보내기 완료: {result['export_path']}")
+        else:
+            print(f"❌ 모델 내보내기 실패: {result.get('error', 'Unknown error')}")
+        
+        return result
+    
+    async def get_learning_insights(self) -> Dict[str, Any]:
+        """학습 인사이트 제공"""
+        if not self.llm_learning:
+            return {"error": "LLM 학습 모듈이 초기화되지 않았습니다."}
+        
+        return await self.llm_learning.get_learning_insights()
+    
+    async def optimize_learning_strategy(self) -> Dict[str, Any]:
+        """학습 전략 최적화"""
+        if not self.llm_learning:
+            return {"error": "LLM 학습 모듈이 초기화되지 않았습니다."}
+        
+        return await self.llm_learning.optimize_learning_strategy()
+    
+    async def get_knowledge_patterns(self) -> Dict[str, Any]:
+        """지식 패턴 조회"""
+        if not self.llm_learning:
+            return {"error": "LLM 학습 모듈이 초기화되지 않았습니다."}
+        
+        # 지식 패턴 정보 반환
+        patterns = self.llm_learning.knowledge_patterns
+        total_patterns = len(patterns)
+        
+        pattern_list = []
+        for pattern_id, pattern in patterns.items():
+            pattern_list.append({
+                "id": pattern_id,
+                "type": pattern.pattern_type,
+                "confidence": pattern.confidence,
+                "usage_count": pattern.usage_count,
+                "description": pattern.pattern_data.get("description", "No description")
+            })
+        
+        return {
+            "total_patterns": total_patterns,
+            "patterns": pattern_list
+        }
 
 # 테스트 코드
 if __name__ == "__main__":
-    async def test():
-        foundation = SLMFoundation()
-        await foundation.initialize()
+    async def test_slm_foundation():
+        """sLM Foundation Model 테스트"""
+        print("🧠 sLM Foundation Model 테스트")
         
-        mission = "Pick up the red cup and place it on the table"
-        plan = await foundation.interpret_mission(mission)
+        # Foundation Model 초기화
+        foundation = SLMFoundation(
+            model_type="phi35",
+            model_name="microsoft/Phi-3.5-mini-instruct",
+            device="auto",
+            learning_config={"enabled": True, "learning_rate": 0.01},
+            training_output_dir="models/slm_foundation",
+            num_epochs=2,
+            batch_size=2,
+            learning_rate=1e-4
+        )
         
-        print(f"Mission: {plan.mission}")
-        print(f"Subtasks: {len(plan.subtasks)}")
-        for i, task in enumerate(plan.subtasks):
-            print(f"  {i+1}. {task['action']} -> {task['target']}")
-        print(f"Expected duration: {plan.expected_duration} seconds")
+        try:
+            await foundation.initialize()
+            
+            # 미션 처리 테스트
+            test_missions = [
+                "Pick up the red cup and place it on the table",
+                "Organize the books on the shelf by size"
+            ]
+            
+            for mission in test_missions:
+                print(f"\n📋 미션 처리: {mission}")
+                result = await foundation.process_mission_with_learning(
+                    mission=mission,
+                    context={"environment": "simple", "safety_level": "normal"}
+                )
+                
+                if result['success']:
+                    print(f"✅ 처리 완료: {len(result['subtasks'])}개 서브태스크")
+                    print(f"📊 학습 가치: {result['learning_value']:.3f}")
+                else:
+                    print(f"❌ 처리 실패: {result.get('error', 'Unknown error')}")
+            
+            # 훈련 상태 확인
+            training_status = await foundation.get_training_status()
+            print(f"\n📊 훈련 상태: {training_status}")
+            
+            # 학습 인사이트 확인
+            insights = await foundation.get_learning_insights()
+            print(f"\n🧠 학습 인사이트: {insights}")
+            
+        except Exception as e:
+            print(f"❌ 테스트 실패: {e}")
+        
+        print("✅ sLM Foundation Model 테스트 완료")
     
-    asyncio.run(test())
+    asyncio.run(test_slm_foundation())

@@ -1,0 +1,735 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 대화형 동작학습 시스템</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            grid-template-rows: 60px 1fr;
+            height: 100vh;
+            gap: 10px;
+            padding: 10px;
+        }
+        
+        .header {
+            grid-column: 1 / -1;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4a5568;
+        }
+        
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #e53e3e;
+            transition: background 0.3s;
+        }
+        
+        .status-dot.connected {
+            background: #38a169;
+        }
+        
+        .chat-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .chat-header {
+            padding: 15px 20px;
+            background: #4299e1;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f7fafc;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        
+        .message.user {
+            background: #4299e1;
+            color: white;
+            margin-left: auto;
+        }
+        
+        .message.ai {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .message.system {
+            background: #ed8936;
+            color: white;
+            text-align: center;
+            max-width: 100%;
+        }
+        
+        .chat-input {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .input-field {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        .input-field:focus {
+            outline: none;
+            border-color: #4299e1;
+        }
+        
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #4299e1;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #3182ce;
+        }
+        
+        .btn-voice {
+            background: #e53e3e;
+            color: white;
+        }
+        
+        .btn-voice.listening {
+            background: #38a169;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .simulation-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .simulation-header {
+            padding: 15px 20px;
+            background: #48bb78;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .simulation-canvas {
+            flex: 1;
+            position: relative;
+            background: #f0f8ff;
+            overflow: hidden;
+        }
+        
+        .robot {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: #4299e1;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 10px rgba(66, 153, 225, 0.4);
+        }
+        
+        .target {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: #48bb78;
+            border-radius: 50%;
+            opacity: 0.7;
+        }
+        
+        .trajectory-point {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(66, 153, 225, 0.6);
+            border-radius: 50%;
+        }
+        
+        .control-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .panel-section {
+            margin-bottom: 25px;
+        }
+        
+        .panel-title {
+            font-weight: bold;
+            color: #4a5568;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        
+        .skill-item {
+            margin-bottom: 15px;
+        }
+        
+        .skill-name {
+            font-size: 14px;
+            color: #4a5568;
+            margin-bottom: 5px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4299e1, #48bb78);
+            transition: width 0.5s ease;
+        }
+        
+        .feedback-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .btn-feedback {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-positive {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .btn-negative {
+            background: #e53e3e;
+            color: white;
+        }
+        
+        .btn-corrective {
+            background: #ed8936;
+            color: white;
+        }
+        
+        .btn-guidance {
+            background: #805ad5;
+            color: white;
+        }
+        
+        .system-info {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.4;
+        }
+        
+        .learning-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: #f7fafc;
+            border-radius: 8px;
+        }
+        
+        .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #4299e1;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="title">🎯 대화형 동작학습 시스템</div>
+            <div class="status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">연결 중...</span>
+            </div>
+        </div>
+        
+        <!-- Chat Panel -->
+        <div class="chat-panel">
+            <div class="chat-header">💬 AI와 대화</div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="chat-input">
+                <div class="input-group">
+                    <input type="text" class="input-field" id="messageInput" placeholder="메시지를 입력하세요...">
+                    <button class="btn btn-voice" id="voiceBtn">🎤</button>
+                    <button class="btn btn-primary" id="sendBtn">전송</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Simulation Panel -->
+        <div class="simulation-panel">
+            <div class="simulation-header">👁️ 실시간 시뮬레이션</div>
+            <div class="simulation-canvas" id="simulationCanvas">
+                <div class="robot" id="robot" style="left: 380px; top: 280px;">🤖</div>
+            </div>
+        </div>
+        
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <!-- Learning Stats -->
+            <div class="panel-section">
+                <div class="panel-title">📊 학습 통계</div>
+                <div class="learning-stats">
+                    <div class="stat-item">
+                        <div class="stat-value" id="totalInteractions">0</div>
+                        <div class="stat-label">총 상호작용</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="successRate">0%</div>
+                        <div class="stat-label">성공률</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Skill Progress -->
+            <div class="panel-section">
+                <div class="panel-title">🎯 스킬 진행도</div>
+                <div id="skillProgress">
+                    <!-- Skills will be populated by JavaScript -->
+                </div>
+            </div>
+            
+            <!-- Quick Feedback -->
+            <div class="panel-section">
+                <div class="panel-title">⚡ 빠른 피드백</div>
+                <div class="feedback-buttons">
+                    <button class="btn-feedback btn-positive" onclick="sendFeedback('positive', '좋습니다!')">👍 좋음</button>
+                    <button class="btn-feedback btn-negative" onclick="sendFeedback('negative', '다시 시도')">👎 개선 필요</button>
+                    <button class="btn-feedback btn-corrective" onclick="sendFeedback('corrective', '수정 필요')">🔧 수정</button>
+                    <button class="btn-feedback btn-guidance" onclick="sendFeedback('guidance', '안내 필요')">📖 안내</button>
+                </div>
+            </div>
+            
+            <!-- System Control -->
+            <div class="panel-section">
+                <div class="panel-title">⚙️ 시스템 제어</div>
+                <button class="btn btn-primary" onclick="initializeSystem()" style="width: 100%; margin-bottom: 10px;">시스템 초기화</button>
+                <button class="btn btn-primary" onclick="startLearningSession()" style="width: 100%;">학습 세션 시작</button>
+            </div>
+            
+            <!-- System Info -->
+            <div class="panel-section">
+                <div class="panel-title">ℹ️ 시스템 정보</div>
+                <div class="system-info" id="systemInfo">
+                    시스템 상태: 대기 중<br>
+                    활성 세션: 0개<br>
+                    마지막 업데이트: -
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Socket.IO 연결
+        const socket = io();
+        
+        // 전역 변수
+        let isListening = false;
+        let userId = null;
+        let currentSession = null;
+        let totalInteractions = 0;
+        let successfulInteractions = 0;
+        
+        // DOM 요소
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const voiceBtn = document.getElementById('voiceBtn');
+        const sendBtn = document.getElementById('sendBtn');
+        const robot = document.getElementById('robot');
+        const simulationCanvas = document.getElementById('simulationCanvas');
+        const skillProgressContainer = document.getElementById('skillProgress');
+        const systemInfo = document.getElementById('systemInfo');
+        
+        // Socket 이벤트 핸들러
+        socket.on('connected', (data) => {
+            userId = data.user_id;
+            statusDot.classList.add('connected');
+            statusText.textContent = '연결됨';
+            addMessage('system', '시스템에 연결되었습니다.');
+            updateSystemInfo(data);
+        });
+        
+        socket.on('ai_response', (data) => {
+            addMessage('ai', data.response);
+            totalInteractions++;
+            updateStats();
+        });
+        
+        socket.on('robot_position_update', (data) => {
+            const pos = data.position;
+            robot.style.left = pos.x - 20 + 'px';
+            robot.style.top = pos.y - 20 + 'px';
+            
+            // 궤적 점 추가
+            addTrajectoryPoint(pos.x, pos.y);
+        });
+        
+        socket.on('robot_action_complete', (data) => {
+            addMessage('system', `동작 완료: ${data.action}`);
+            successfulInteractions++;
+            updateStats();
+        });
+        
+        socket.on('skill_progress_update', (data) => {
+            updateSkillProgress(data.skills);
+        });
+        
+        socket.on('learning_adjusted', (data) => {
+            addMessage('system', `학습 조정: ${data.skill} - ${data.parameter} (${data.reason})`);
+        });
+        
+        socket.on('system_initialized', (data) => {
+            addMessage('system', '✅ 시스템 초기화 완료');
+            statusText.textContent = '시스템 준비됨';
+        });
+        
+        socket.on('system_error', (data) => {
+            addMessage('system', `❌ 오류: ${data.error}`);
+        });
+        
+        // 이벤트 리스너
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        sendBtn.addEventListener('click', sendMessage);
+        voiceBtn.addEventListener('click', toggleVoiceInput);
+        
+        // 시뮬레이션 캔버스 클릭 이벤트
+        simulationCanvas.addEventListener('click', (e) => {
+            const rect = simulationCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // 로봇 이동 요청
+            fetch('/api/robot/move', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({x: x, y: y})
+            });
+            
+            addMessage('user', `위치 (${Math.round(x)}, ${Math.round(y)})로 이동 요청`);
+        });
+        
+        // 함수들
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+            
+            addMessage('user', message);
+            messageInput.value = '';
+            
+            // 서버에 메시지 전송
+            fetch('/api/chat/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    message: message,
+                    type: 'text'
+                })
+            });
+        }
+        
+        function toggleVoiceInput() {
+            if (!isListening) {
+                startVoiceRecognition();
+            } else {
+                stopVoiceRecognition();
+            }
+        }
+        
+        function startVoiceRecognition() {
+            if (!('webkitSpeechRecognition' in window)) {
+                addMessage('system', '음성 인식을 지원하지 않는 브라우저입니다.');
+                return;
+            }
+            
+            const recognition = new webkitSpeechRecognition();
+            recognition.lang = 'ko-KR';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            
+            recognition.onstart = () => {
+                isListening = true;
+                voiceBtn.classList.add('listening');
+                voiceBtn.textContent = '🛑';
+                addMessage('system', '음성 인식 시작...');
+            };
+            
+            recognition.onresult = (event) => {
+                const result = event.results[0][0].transcript;
+                messageInput.value = result;
+                addMessage('user', `[음성] ${result}`);
+                
+                // 자동으로 메시지 전송
+                setTimeout(() => {
+                    sendMessage();
+                }, 500);
+            };
+            
+            recognition.onerror = (event) => {
+                addMessage('system', `음성 인식 오류: ${event.error}`);
+                stopVoiceRecognition();
+            };
+            
+            recognition.onend = () => {
+                stopVoiceRecognition();
+            };
+            
+            recognition.start();
+        }
+        
+        function stopVoiceRecognition() {
+            isListening = false;
+            voiceBtn.classList.remove('listening');
+            voiceBtn.textContent = '🎤';
+        }
+        
+        function sendFeedback(type, content) {
+            fetch('/api/feedback/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    feedback_type: type,
+                    content: content,
+                    confidence: 1.0,
+                    context: {
+                        current_skill: 'basic_movement',
+                        action: 'user_feedback'
+                    }
+                })
+            });
+            
+            addMessage('user', `[피드백] ${content}`);
+        }
+        
+        function initializeSystem() {
+            fetch('/api/system/initialize', {method: 'POST'})
+                .then(response => response.json())
+                .then(data => {
+                    addMessage('system', '시스템 초기화 시작...');
+                });
+        }
+        
+        function startLearningSession() {
+            const userName = prompt('사용자 이름을 입력하세요:', 'User');
+            if (!userName) return;
+            
+            fetch('/api/learning/session/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    user_name: userName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                currentSession = data.session_id;
+                addMessage('system', `학습 세션 시작: ${currentSession}`);
+            });
+        }
+        
+        function addMessage(type, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            messageDiv.innerHTML = `${content}<div style="font-size: 10px; opacity: 0.7; margin-top: 5px;">${timestamp}</div>`;
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        function addTrajectoryPoint(x, y) {
+            const point = document.createElement('div');
+            point.className = 'trajectory-point';
+            point.style.left = x - 2 + 'px';
+            point.style.top = y - 2 + 'px';
+            
+            simulationCanvas.appendChild(point);
+            
+            // 오래된 점들 제거 (최대 50개)
+            const points = simulationCanvas.querySelectorAll('.trajectory-point');
+            if (points.length > 50) {
+                points[0].remove();
+            }
+        }
+        
+        function updateSkillProgress(skills) {
+            skillProgressContainer.innerHTML = '';
+            
+            for (const [skillName, progress] of Object.entries(skills)) {
+                const skillDiv = document.createElement('div');
+                skillDiv.className = 'skill-item';
+                
+                const percentage = Math.round(progress * 100);
+                const displayName = skillName.replace(/_/g, ' ').replace(/\w/g, l => l.toUpperCase());
+                
+                skillDiv.innerHTML = `
+                    <div class="skill-name">${displayName}</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${percentage}%"></div>
+                    </div>
+                    <div style="font-size: 12px; color: #666; margin-top: 2px;">${percentage}%</div>
+                `;
+                
+                skillProgressContainer.appendChild(skillDiv);
+            }
+        }
+        
+        function updateStats() {
+            document.getElementById('totalInteractions').textContent = totalInteractions;
+            const successRate = totalInteractions > 0 ? Math.round((successfulInteractions / totalInteractions) * 100) : 0;
+            document.getElementById('successRate').textContent = successRate + '%';
+        }
+        
+        function updateSystemInfo(data) {
+            const info = `
+                시스템 상태: ${data.system_status ? '준비됨' : '초기화 중'}<br>
+                사용자 ID: ${userId ? userId.substring(0, 8) + '...' : '-'}<br>
+                세션: ${currentSession || '없음'}<br>
+                마지막 업데이트: ${new Date().toLocaleTimeString()}
+            `;
+            systemInfo.innerHTML = info;
+        }
+        
+        // 초기화
+        window.addEventListener('load', () => {
+            // 기본 스킬 진행도 표시
+            updateSkillProgress({
+                'basic_movement': 0.92,
+                'object_recognition': 0.72,
+                'simple_grasp': 0.50,
+                'precise_manipulation': 0.20
+            });
+            
+            // 시스템 상태 주기적 업데이트
+            setInterval(() => {
+                updateSystemInfo({system_status: statusDot.classList.contains('connected')});
+            }, 5000);
+        });
+    </script>
+</body>
+</html>
+    

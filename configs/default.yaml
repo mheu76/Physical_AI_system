@@ -9,7 +9,7 @@ system:
   enable_monitoring: true
   description: "PHI-3.5 내장 발달적 로보틱스 시스템"
 
-# Foundation Model 설정 - PHI-3.5 전용
+# Foundation Model 설정 - PHI-3.5 전용 + LLM 학습 모듈
 foundation_model:
   model_type: "phi35"  # phi35 전용
   
@@ -21,6 +21,15 @@ foundation_model:
     device: "auto"  # auto, cpu, cuda, mps
     cache_dir: null  # 모델 캐시 디렉토리 (null = 기본값)
     max_length: 2048  # 최대 토큰 길이
+    
+    # LLM 학습 모듈 설정
+    learning_config:
+      enabled: true
+      learning_rate: 0.01
+      min_confidence_threshold: 0.7
+      max_examples: 10000
+      pattern_update_interval: 100  # 예제당 패턴 업데이트
+      adaptation_threshold: 0.6  # 적응 학습 임계값
     
     # 생성 파라미터
     generation:

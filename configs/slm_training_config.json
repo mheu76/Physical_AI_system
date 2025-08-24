@@ -1,0 +1,182 @@
+{
+  "model_type": "phi35",
+  "model_name": "microsoft/Phi-3.5-mini-instruct",
+  "device": "cpu",
+  "learning_config": {
+    "enabled": true,
+    "learning_rate": 0.01,
+    "min_confidence_threshold": 0.7,
+    "max_examples": 1000,
+    "pattern_update_interval": 10,
+    "adaptation_threshold": 0.6
+  },
+  "training_output_dir": "models/slm_foundation",
+  "num_epochs": 1,
+  "batch_size": 2,
+  "learning_rate": 5e-5,
+  "warmup_steps": 100,
+  "weight_decay": 0.01,
+  "gradient_accumulation_steps": 4,
+  "max_grad_norm": 1.0,
+  "logging_steps": 10,
+  "save_steps": 500,
+  "eval_steps": 100,
+  "save_total_limit": 3,
+  "fp16": false,
+  "dataloader_pin_memory": false,
+  "generate_training_data": true,
+  "evaluate_model": true,
+  "export_model": true,
+  "resume_from_checkpoint": false,
+  "export_path": "models/slm_foundation_exported",
+  "training_missions": [
+    {
+      "mission": "Pick up the red cup and place it on the table",
+      "context": {
+        "environment": "simple",
+        "safety_level": "normal"
+      }
+    },
+    {
+      "mission": "Organize the books on the shelf by size",
+      "context": {
+        "environment": "complex",
+        "safety_level": "high"
+      }
+    },
+    {
+      "mission": "Clean up the messy desk by putting items in their proper places",
+      "context": {
+        "environment": "complex",
+        "safety_level": "normal"
+      }
+    },
+    {
+      "mission": "Help me prepare dinner by bringing ingredients from the pantry",
+      "context": {
+        "environment": "simple",
+        "safety_level": "high"
+      }
+    },
+    {
+      "mission": "Assist the elderly person by bringing their medicine and water",
+      "context": {
+        "environment": "complex",
+        "safety_level": "high"
+      }
+    },
+    {
+      "mission": "Sort the laundry by color and fabric type",
+      "context": {
+        "environment": "simple",
+        "safety_level": "normal"
+      }
+    },
+    {
+      "mission": "Set up the dining table with plates, utensils, and glasses",
+      "context": {
+        "environment": "complex",
+        "safety_level": "normal"
+      }
+    },
+    {
+      "mission": "Water the plants in the living room",
+      "context": {
+        "environment": "simple",
+        "safety_level": "low"
+      }
+    },
+    {
+      "mission": "Assist in laboratory by preparing chemical solutions",
+      "context": {
+        "environment": "laboratory",
+        "safety_level": "critical"
+      }
+    },
+    {
+      "mission": "Help in kitchen by chopping vegetables safely",
+      "context": {
+        "environment": "kitchen",
+        "safety_level": "high"
+      }
+    }
+  ],
+  "custom_training_examples": [
+    {
+      "mission": "Assist in laboratory by preparing chemical solutions",
+      "context": {
+        "environment": "laboratory",
+        "safety_level": "critical"
+      },
+      "subtasks": [
+        {
+          "action": "move_to",
+          "target": "chemical_storage"
+        },
+        {
+          "action": "grasp",
+          "target": "chemical_bottle"
+        },
+        {
+          "action": "move_to",
+          "target": "workbench"
+        },
+        {
+          "action": "place",
+          "target": "mixing_area"
+        }
+      ],
+      "constraints": {
+        "max_force": 10.0,
+        "safety_distance": 0.5
+      },
+      "success_criteria": [
+        "chemical_prepared",
+        "safety_maintained"
+      ],
+      "execution_result": {
+        "success": true,
+        "efficiency": 0.9
+      },
+      "learning_value": 0.95
+    },
+    {
+      "mission": "Help in kitchen by chopping vegetables safely",
+      "context": {
+        "environment": "kitchen",
+        "safety_level": "high"
+      },
+      "subtasks": [
+        {
+          "action": "move_to",
+          "target": "cutting_board"
+        },
+        {
+          "action": "grasp",
+          "target": "knife"
+        },
+        {
+          "action": "grasp",
+          "target": "vegetable"
+        },
+        {
+          "action": "place",
+          "target": "chopped_vegetables"
+        }
+      ],
+      "constraints": {
+        "max_force": 15.0,
+        "safety_distance": 0.2
+      },
+      "success_criteria": [
+        "vegetables_chopped",
+        "no_injuries"
+      ],
+      "execution_result": {
+        "success": true,
+        "efficiency": 0.8
+      },
+      "learning_value": 0.85
+    }
+  ]
+}
