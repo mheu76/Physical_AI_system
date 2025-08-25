@@ -243,7 +243,6 @@ class VisionSensor(SensorInterface):
         self._simulation_mode = self._config.get('simulation_mode', True)
         self._frame_count = 0
         
-    @require_initialization
     @safe_async_call(fallback_value=False, max_retries=3, component="VisionSensor", operation="initialize")
     async def initialize(self) -> bool:
         """비전 센서 초기화"""
@@ -405,63 +404,194 @@ class VisionSensor(SensorInterface):
 class TactileSensor(SensorInterface):
     """촉각 센서"""
     
-    def __init__(self, sensor_id: str):
-        self.sensor_id = sensor_id
-        self.sensitivity = 0.1  # Newton
-        self.calibrated = False
+    def __init__(self, sensor_id: str, config: Optional[Dict[str, Any]] = None):
+        super().__init__(sensor_id)
+        self._config = config or {}
+        self.sensitivity = self._config.get('sensitivity', 0.1)  # Newton
+        self._simulation_mode = self._config.get('simulation_mode', True)
         
+    async def initialize(self) -> bool:
+        """촉각 센서 초기화"""
+        try:
+            self._status = SensorStatus.INITIALIZING
+            logger.info(f"Initializing tactile sensor {self.sensor_id}")
+            
+            if self._simulation_mode:
+                await asyncio.sleep(0.2)  # Simulate initialization
+            
+            self._status = SensorStatus.ACTIVE
+            self._initialized = True
+            self._health.status = SensorStatus.ACTIVE
+            
+            logger.info(f"Tactile sensor {self.sensor_id} initialized successfully")
+            return True
+            
+        except Exception as e:
+            self._status = SensorStatus.ERROR
+            self._health.status = SensorStatus.ERROR
+            self._health.error_count += 1
+            logger.error(f"Failed to initialize tactile sensor {self.sensor_id}: {e}")
+            return False
+    
+    async def shutdown(self) -> bool:
+        """촉각 센서 종료"""
+        try:
+            self._status = SensorStatus.OFFLINE
+            self._initialized = False
+            logger.info(f"Tactile sensor {self.sensor_id} shutdown complete")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to shutdown tactile sensor {self.sensor_id}: {e}")
+            return False
+        
+    @require_initialization
     async def read_data(self) -> SensorData:
         """촉각 데이터 읽기"""
-        # 시뮬레이션: 압력, 온도, 질감 데이터
-        pressure = np.random.uniform(0, 10)  # Newton
-        temperature = np.random.uniform(15, 35)  # Celsius
-        texture_roughness = np.random.uniform(0, 1)
-        
-        return SensorData(
-            timestamp=asyncio.get_event_loop().time(),
-            sensor_type="tactile",
-            data={
-                "pressure": pressure,
-                "temperature": temperature,
-                "texture": texture_roughness,
-                "contact_detected": pressure > self.sensitivity
-            },
-            confidence=0.92
-        )
+        async with self._lock:
+            try:
+                if self._simulation_mode:
+                    # 시뮬레이션: 압력, 온도, 질감 데이터
+                    pressure = np.random.uniform(0, 10)  # Newton
+                    temperature = np.random.uniform(15, 35)  # Celsius
+                    texture_roughness = np.random.uniform(0, 1)
+                    
+                    data = {
+                        "pressure": pressure,
+                        "temperature": temperature,
+                        "texture": texture_roughness,
+                        "contact_detected": pressure > self.sensitivity
+                    }
+                    
+                    confidence = 0.92
+                    quality = 0.85
+                else:
+                    # 실제 센서 데이터 읽기
+                    data = {}
+                    confidence = 0.8
+                    quality = 0.8
+                
+                return SensorData(
+                    sensor_type="tactile",
+                    sensor_id=self.sensor_id,
+                    data=data,
+                    confidence=confidence,
+                    status=self._status,
+                    data_quality=quality,
+                    metadata={
+                        'simulation_mode': self._simulation_mode,
+                        'sensitivity': self.sensitivity
+                    }
+                )
+                
+            except Exception as e:
+                self._health.error_count += 1
+                logger.error(f"Failed to read tactile data from {self.sensor_id}: {e}")
+                raise HardwareError(f"Tactile sensor read failed: {e}", self.sensor_id, "tactile")
     
     async def calibrate(self) -> bool:
         """촉각 센서 캘리브레이션"""
-        logger.info(f"촉각 센서 {self.sensor_id} 캘리브레이션 중...")
-        await asyncio.sleep(1)
-        self.calibrated = True
-        logger.info(f"촉각 센서 {self.sensor_id} 캘리브레이션 완료")
-        return True
+        try:
+            self._status = SensorStatus.CALIBRATING
+            
+            logger.info(f"Calibrating tactile sensor {self.sensor_id}")
+            await asyncio.sleep(1)  # Simulate calibration time
+            
+            self._status = SensorStatus.ACTIVE
+            logger.info(f"Tactile sensor {self.sensor_id} calibrated successfully")
+            return True
+            
+        except Exception as e:
+            self._status = SensorStatus.ERROR
+            self._health.error_count += 1
+            logger.error(f"Failed to calibrate tactile sensor {self.sensor_id}: {e}")
+            return False
 
 class IMUSensor(SensorInterface):
     """관성 측정 장치"""
     
-    def __init__(self, sensor_id: str):
-        self.sensor_id = sensor_id
-        self.calibrated = False
+    def __init__(self, sensor_id: str, config: Optional[Dict[str, Any]] = None):
+        super().__init__(sensor_id)
+        self._config = config or {}
+        self._update_rate = self._config.get('update_rate', 100)  # Hz
+        self._simulation_mode = self._config.get('simulation_mode', True)
         
+    async def initialize(self) -> bool:
+        """IMU 센서 초기화"""
+        try:
+            self._status = SensorStatus.INITIALIZING
+            logger.info(f"Initializing IMU sensor {self.sensor_id}")
+            
+            if self._simulation_mode:
+                await asyncio.sleep(0.3)  # Simulate initialization
+            
+            self._status = SensorStatus.ACTIVE
+            self._initialized = True
+            self._health.status = SensorStatus.ACTIVE
+            
+            logger.info(f"IMU sensor {self.sensor_id} initialized successfully")
+            return True
+            
+        except Exception as e:
+            self._status = SensorStatus.ERROR
+            self._health.status = SensorStatus.ERROR
+            self._health.error_count += 1
+            logger.error(f"Failed to initialize IMU sensor {self.sensor_id}: {e}")
+            return False
+    
+    async def shutdown(self) -> bool:
+        """IMU 센서 종료"""
+        try:
+            self._status = SensorStatus.OFFLINE
+            self._initialized = False
+            logger.info(f"IMU sensor {self.sensor_id} shutdown complete")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to shutdown IMU sensor {self.sensor_id}: {e}")
+            return False
+        
+    @require_initialization
     async def read_data(self) -> SensorData:
         """IMU 데이터 읽기"""
-        # 가속도, 각속도, 자기장 데이터
-        acceleration = np.random.normal(0, 0.1, 3)  # m/s²
-        gyroscope = np.random.normal(0, 0.05, 3)   # rad/s
-        magnetometer = np.random.normal([0, 0, 1], 0.1, 3)  # normalized
-        
-        return SensorData(
-            timestamp=asyncio.get_event_loop().time(),
-            sensor_type="imu",
-            data={
-                "acceleration": acceleration,
-                "angular_velocity": gyroscope,
-                "magnetic_field": magnetometer,
-                "orientation": self._calculate_orientation(acceleration, magnetometer)
-            },
-            confidence=0.88
-        )
+        async with self._lock:
+            try:
+                if self._simulation_mode:
+                    # 가속도, 각속도, 자기장 데이터
+                    acceleration = np.random.normal(0, 0.1, 3)  # m/s²
+                    gyroscope = np.random.normal(0, 0.05, 3)   # rad/s
+                    magnetometer = np.random.normal([0, 0, 1], 0.1, 3)  # normalized
+                    
+                    data = {
+                        "acceleration": acceleration,
+                        "angular_velocity": gyroscope,
+                        "magnetic_field": magnetometer,
+                        "orientation": self._calculate_orientation(acceleration, magnetometer)
+                    }
+                    
+                    confidence = 0.88
+                    quality = 0.82
+                else:
+                    # 실제 센서 데이터 읽기
+                    data = {}
+                    confidence = 0.8
+                    quality = 0.8
+                
+                return SensorData(
+                    sensor_type="imu",
+                    sensor_id=self.sensor_id,
+                    data=data,
+                    confidence=confidence,
+                    status=self._status,
+                    data_quality=quality,
+                    metadata={
+                        'simulation_mode': self._simulation_mode,
+                        'update_rate': self._update_rate
+                    }
+                )
+                
+            except Exception as e:
+                self._health.error_count += 1
+                logger.error(f"Failed to read IMU data from {self.sensor_id}: {e}")
+                raise HardwareError(f"IMU sensor read failed: {e}", self.sensor_id, "imu")
     
     def _calculate_orientation(self, accel: np.ndarray, mag: np.ndarray) -> np.ndarray:
         """자세 계산 (간단한 버전)"""
@@ -473,11 +603,21 @@ class IMUSensor(SensorInterface):
     
     async def calibrate(self) -> bool:
         """IMU 캘리브레이션"""
-        logger.info(f"IMU 센서 {self.sensor_id} 캘리브레이션 중...")
-        await asyncio.sleep(3)  # 정적 캘리브레이션
-        self.calibrated = True
-        logger.info(f"IMU 센서 {self.sensor_id} 캘리브레이션 완료")
-        return True
+        try:
+            self._status = SensorStatus.CALIBRATING
+            
+            logger.info(f"Calibrating IMU sensor {self.sensor_id}")
+            await asyncio.sleep(3)  # 정적 캘리브레이션
+            
+            self._status = SensorStatus.ACTIVE
+            logger.info(f"IMU sensor {self.sensor_id} calibrated successfully")
+            return True
+            
+        except Exception as e:
+            self._status = SensorStatus.ERROR
+            self._health.error_count += 1
+            logger.error(f"Failed to calibrate IMU sensor {self.sensor_id}: {e}")
+            return False
 
 class ActuatorInterface(ABC):
     """액추에이터 인터페이스 추상 클래스"""
@@ -754,22 +894,22 @@ class HardwareManager:
     async def _initialize_sensors(self):
         """센서 초기화"""
         # 비전 센서
-        vision_sensor = VisionSensor("main_camera")
+        vision_sensor = VisionSensor("main_camera", {'simulation_mode': True, 'auto_calibrate': True})
         self.sensors["main_camera"] = vision_sensor
         self.sensor_fusion.add_sensor("main_camera", vision_sensor)
-        await vision_sensor.calibrate()
+        await vision_sensor.initialize()
         
         # 촉각 센서
-        tactile_sensor = TactileSensor("gripper_tactile")
+        tactile_sensor = TactileSensor("gripper_tactile", {'simulation_mode': True, 'sensitivity': 0.1})
         self.sensors["gripper_tactile"] = tactile_sensor
         self.sensor_fusion.add_sensor("gripper_tactile", tactile_sensor)
-        await tactile_sensor.calibrate()
+        await tactile_sensor.initialize()
         
         # IMU 센서
-        imu_sensor = IMUSensor("body_imu")
+        imu_sensor = IMUSensor("body_imu", {'simulation_mode': True, 'update_rate': 100})
         self.sensors["body_imu"] = imu_sensor
         self.sensor_fusion.add_sensor("body_imu", imu_sensor)
-        await imu_sensor.calibrate()
+        await imu_sensor.initialize()
         
         logger.info("센서 초기화 완료")
     
@@ -846,7 +986,9 @@ class HardwareManager:
         for sensor_id in self.sensors:
             status["sensors"][sensor_id] = {
                 "type": self.sensors[sensor_id].__class__.__name__,
-                "calibrated": getattr(self.sensors[sensor_id], "calibrated", False)
+                "status": self.sensors[sensor_id].status.value,
+                "initialized": self.sensors[sensor_id]._initialized,
+                "healthy": self.sensors[sensor_id].health.is_healthy()
             }
         
         # 액추에이터 상태

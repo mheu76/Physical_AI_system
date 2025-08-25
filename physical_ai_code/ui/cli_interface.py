@@ -83,6 +83,8 @@ class CLIInterface:
         self.interface = PhysicalAIInterface()
         self.running = False
         self.banner_shown = False
+        self.is_processing = False  # 명령 처리 중 플래그
+        self.current_task = None    # 현재 처리 중인 작업
     
     def print_banner(self):
         """시작 배너 출력"""
@@ -133,6 +135,12 @@ Claude Code 스타일의 Physical AI 시스템 인터페이스
         # 메인 대화 루프
         while self.running:
             try:
+                # 현재 처리 중인지 확인
+                if self.is_processing:
+                    # 처리 중일 때는 입력을 받지 않고 대기
+                    await asyncio.sleep(0.1)
+                    continue
+                
                 # 사용자 입력 받기
                 if self.console:
                     user_input = Prompt.ask("\n[bold cyan]Physical AI[/bold cyan]")
@@ -142,22 +150,32 @@ Claude Code 스타일의 Physical AI 시스템 인터페이스
                 if not user_input.strip():
                     continue
                 
-                # 종료 명령 확인
-                if user_input.lower() in ['/quit', '/exit', 'quit', 'exit']:
-                    await self._handle_quit()
-                    break
+                # 명령 처리 시작
+                self.is_processing = True
+                self.current_task = user_input
                 
-                # 도움말 명령
-                elif user_input.lower().startswith('/help'):
-                    await self._handle_help(user_input)
-                
-                # 기타 명령어들
-                elif user_input.startswith('/'):
-                    await self._handle_slash_command(user_input)
-                
-                # 자연어 대화
-                else:
-                    await self._handle_natural_language(user_input)
+                try:
+                    # 종료 명령 확인
+                    if user_input.lower() in ['/quit', '/exit', 'quit', 'exit']:
+                        await self._handle_quit()
+                        break
+                    
+                    # 도움말 명령
+                    elif user_input.lower().startswith('/help'):
+                        await self._handle_help(user_input)
+                    
+                    # 기타 명령어들
+                    elif user_input.startswith('/'):
+                        await self._handle_slash_command(user_input)
+                    
+                    # 자연어 대화
+                    else:
+                        await self._handle_natural_language(user_input)
+                        
+                finally:
+                    # 명령 처리 완료
+                    self.is_processing = False
+                    self.current_task = None
                     
             except KeyboardInterrupt:
                 await self._handle_quit()
@@ -171,10 +189,13 @@ Claude Code 스타일의 Physical AI 시스템 인터페이스
     async def _handle_natural_language(self, user_input: str):
         """자연어 입력 처리"""
         if self.console:
-            with self.console.status("[bold yellow]처리 중...") as status:
+            with self.console.status("[bold yellow]🤖 AI가 생각하고 있습니다...") as status:
+                # 처리 중 상태 표시
+                status.update(f"[bold yellow]📝 명령 분석 중: '{user_input[:50]}...'")
                 result = await self.interface.process_input(user_input)
         else:
-            print("처리 중...")
+            print(f"🤖 처리 중: {user_input}")
+            print("⏳ 완료될 때까지 기다려주세요...")
             result = await self.interface.process_input(user_input)
         
         if result["success"]:
@@ -239,10 +260,15 @@ Claude Code 스타일의 Physical AI 시스템 인터페이스
             return
         
         if self.console:
-            with self.console.status(f"[bold blue]미션 실행 중: {mission}"):
+            with self.console.status(f"[bold blue]🚀 미션 실행 중: {mission}...") as status:
+                status.update("[bold blue]📋 미션 분석 중...")
+                await asyncio.sleep(0.5)  # 시각적 피드백
+                status.update("[bold blue]🤖 로봇 시스템 준비 중...")
                 result = await self.interface.execute_command("mission", mission=mission)
         else:
-            print(f"미션 실행 중: {mission}")
+            print(f"🚀 미션 실행 중: {mission}")
+            print("📋 미션을 분석하고 실행 계획을 수립합니다...")
+            print("⏳ 완료될 때까지 다른 명령을 입력하지 마세요.")
             result = await self.interface.execute_command("mission", mission=mission)
         
         self._display_result(result, f"미션 '{mission}' 실행 결과")
@@ -257,10 +283,15 @@ Claude Code 스타일의 Physical AI 시스템 인터페이스
             return
         
         if self.console:
-            with self.console.status(f"[bold blue]학습 중: {skill}"):
+            with self.console.status(f"[bold blue]🧠 학습 진행 중: {skill}...") as status:
+                status.update("[bold blue]📚 학습 데이터 준비 중...")
+                await asyncio.sleep(0.5)
+                status.update("[bold blue]🔄 신경망 훈련 중...")
                 result = await self.interface.execute_command("learn", skill=skill)
         else:
-            print(f"학습 중: {skill}")
+            print(f"🧠 학습 시작: {skill}")
+            print("📚 학습 데이터를 준비하고 신경망을 훈련합니다...")
+            print("⏳ 학습이 완료될 때까지 기다려주세요.")
             result = await self.interface.execute_command("learn", skill=skill)
         
         self._display_result(result, f"'{skill}' 학습 결과")
@@ -279,10 +310,15 @@ Claude Code 스타일의 Physical AI 시스템 인터페이스
     async def _run_simulation(self, scenario: str):
         """시뮬레이션 실행"""
         if self.console:
-            with self.console.status(f"[bold blue]시뮬레이션 실행 중: {scenario or 'default'}"):
+            with self.console.status(f"[bold blue]🔬 시뮬레이션 실행 중: {scenario or 'default'}...") as status:
+                status.update("[bold blue]🌍 가상 환경 초기화 중...")
+                await asyncio.sleep(0.3)
+                status.update("[bold blue]⚙️ 물리 엔진 시작 중...")
                 result = await self.interface.execute_command("simulate", scenario=scenario)
         else:
-            print(f"시뮬레이션 실행 중: {scenario or 'default'}")
+            print(f"🔬 시뮬레이션 시작: {scenario or 'default'}")
+            print("🌍 가상 환경과 물리 엔진을 초기화합니다...")
+            print("⏳ 시뮬레이션이 완료될 때까지 기다려주세요.")
             result = await self.interface.execute_command("simulate", scenario=scenario)
         
         self._display_result(result, "시뮬레이션 결과")
@@ -349,18 +385,27 @@ Claude Code 스타일의 Physical AI 시스템 인터페이스
     def _display_result(self, result: Dict[str, Any], title: str):
         """결과 표시"""
         if self.console:
-            if result.get("success"):
-                content = result.get("message", "작업 완료")
-                self.console.print(Panel(content, title=f"✅ {title}", border_style="green"))
-            else:
-                error = result.get("error", "알 수 없는 오류")
-                self.console.print(Panel(error, title=f"❌ {title}", border_style="red"))
+            try:
+                if result.get("success"):
+                    content = result.get("message", "작업 완료")
+                    self.console.print(Panel(content, title=f"[green]SUCCESS[/green] {title}", border_style="green"))
+                else:
+                    error = result.get("error", "알 수 없는 오류")
+                    self.console.print(Panel(error, title=f"[red]ERROR[/red] {title}", border_style="red"))
+            except UnicodeEncodeError:
+                # Fallback to plain text on encoding error
+                if result.get("success"):
+                    print(f"\nSUCCESS {title}:")
+                    print(f"  {result.get('message', '작업 완료')}")
+                else:
+                    print(f"\nERROR {title}:")
+                    print(f"  {result.get('error', '알 수 없는 오류')}")
         else:
             if result.get("success"):
-                print(f"\n✅ {title}:")
+                print(f"\nSUCCESS {title}:")
                 print(f"  {result.get('message', '작업 완료')}")
             else:
-                print(f"\n❌ {title}:")
+                print(f"\nERROR {title}:")
                 print(f"  {result.get('error', '알 수 없는 오류')}")
     
     async def _handle_quit(self):
