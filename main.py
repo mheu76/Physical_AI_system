@@ -191,6 +191,31 @@ class PhysicalAI:
             
             # 30분마다 실행
             await asyncio.sleep(1800)
+    
+    async def shutdown(self):
+        """시스템 종료"""
+        logger.info("🔄 Physical AI 시스템 종료 중...")
+        
+        try:
+            if hasattr(self, 'hw_manager') and self.hw_manager:
+                await self.hw_manager.shutdown()
+                
+            if hasattr(self, 'agent_executor') and self.agent_executor:
+                await self.agent_executor.shutdown()
+                
+            if hasattr(self, 'dev_engine') and self.dev_engine:
+                # 개발 엔진은 비동기 shutdown이 없을 수 있음
+                pass
+                
+            if hasattr(self, 'slm_foundation') and self.slm_foundation:
+                # SLM Foundation은 비동기 shutdown이 없을 수 있음
+                pass
+                
+            self.system_ready = False
+            logger.info("👋 Physical AI 시스템 종료 완료")
+            
+        except Exception as e:
+            logger.error(f"❌ 시스템 종료 중 오류: {e}")
 
 async def main():
     parser = argparse.ArgumentParser(description='Physical AI System')

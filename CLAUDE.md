@@ -12,6 +12,12 @@ pip install -r requirements.txt
 # Install development dependencies  
 pip install -r requirements-dev.txt
 
+# Install HuggingFace requirements for PHI-3.5 models
+pip install -r requirements-hf.txt
+
+# Install interactive interface requirements
+pip install -r requirements-interactive.txt
+
 # Install with specific feature sets
 pip install -e .[dev,simulation,visualization]
 
@@ -84,10 +90,16 @@ flake8 .
 # Type checking
 mypy .
 
+# Run all tests with coverage
+pytest --cov=. tests/
+
 # Run specific foundation model tests
 python test_foundation.py
 python test_phi35_foundation.py
 python test_phi35_simple.py
+
+# Run cache fix test
+python test_cache_fix.py
 ```
 
 ### Training and Model Operations
@@ -210,13 +222,71 @@ The entire system is built on **asyncio** for:
 
 ### Key Files to Understand
 - `main.py` - System entry point and orchestration
+- `modular_main.py` - Alternative modular system entry point
 - `core/config_manager.py` - Configuration system
-- `foundation_model/slm_foundation.py` - Core AI model
+- `foundation_model/slm_foundation.py` - Core AI model with PHI-3.5 integration
+- `foundation_model/phi35_integration.py` - PHI-3.5 specific implementation
 - `developmental_learning/dev_engine.py` - Learning algorithms
 - `configs/default.yaml` - System configuration reference
+- `configs/modular.yaml` - Modular system configuration
 
 ### Plugin Development
 Follow the plugin interface patterns in existing plugins. Each plugin type has specific base classes and hooks defined in the core system.
 
 ### Model Training
 Use the provided training scripts as templates. The system supports both supervised fine-tuning and reinforcement learning approaches for different components.
+
+### Important Language Support
+This system includes Korean language support and localization:
+- System language can be configured in `configs/default.yaml` with the `language` setting
+- Localization is handled through `core/localization.py`
+- Support for `ko` (Korean) and `en` (English) languages
+
+### Working with Git
+The repository uses Git for version control. Key branches and workflow patterns:
+- Main development happens on the `main` branch
+- Modified files are tracked, including `developmental_learning/dev_engine.py`
+- Always check `git status` before making significant changes
+
+### Entry Points and Console Scripts
+The system provides multiple entry points configured in `setup.py`:
+- `physical-ai` - Main system entry point
+- `physical-ai-test` - Integration test runner
+- `physical-ai-example` - Basic example runner
+
+### Physical AI Code - Unified Interface
+A new Claude Code-style unified interface has been implemented:
+
+```bash
+# Run the unified interface (Claude Code style)
+python physical_ai_code.py
+
+# Single mission execution
+python physical_ai_code.py --mission "Pick up the red cup"
+
+# With custom config
+python physical_ai_code.py --config configs/modular.yaml --debug
+```
+
+**Key Features:**
+- **Natural Language Interface**: Talk to the robot in Korean/English
+- **Tool System**: All Physical AI functions as callable tools
+- **Session Management**: Persistent conversation history
+- **Command Processing**: Slash commands (/mission, /learn, /hardware, etc.)
+- **Rich Terminal UI**: Beautiful terminal interface with Rich library
+
+**Available Commands:**
+- `/mission <task>` - Execute physical missions
+- `/learn <skill>` - Start skill learning  
+- `/hardware` - Check hardware status
+- `/simulate <scenario>` - Run physics simulation
+- `/vision` - Computer vision tasks
+- `/status` - System status
+- `/tools` - List available tools
+- `/help` - Get help
+
+**Natural Language Examples:**
+- "로봇아, 빨간 컵을 테이블로 옮겨줘"
+- "새로운 잡기 동작을 학습해줘"
+- "시뮬레이션에서 테스트해보자"
+- "하드웨어 상태를 확인해줘"

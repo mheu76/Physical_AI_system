@@ -1,0 +1,53 @@
+{
+  "id": "afb55a60-2f37-4017-8866-0c520f59dd1a",
+  "name": "Custom Assistant",
+  "description": "사용자 요청 '간단한 인사를 하는 도우미 에이전트'을 처리하는 어시스턴트",
+  "created_at": "2025-08-25T23:00:54.991145",
+  "updated_at": "2025-08-25T23:00:54.991145",
+  "creator_instruction": "간단한 인사를 하는 도우미 에이전트",
+  "capabilities": [
+    {
+      "name": "Task Execution",
+      "description": "간단한 인사를 하는 도우미 에이전트",
+      "tools_required": [
+        "mission_executor"
+      ],
+      "parameters": {
+        "task": "간단한 인사를 하는 도우미 에이전트"
+      },
+      "confidence": 1.0
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "user_request",
+      "action_sequence": [
+        {
+          "action": "analyze_request",
+          "parameters": {}
+        },
+        {
+          "action": "execute_task",
+          "parameters": {
+            "task": "간단한 인사를 하는 도우미 에이전트"
+          }
+        }
+      ],
+      "priority": 5,
+      "conditions": {}
+    }
+  ],
+  "personality": {
+    "helpful": 0.9,
+    "reliable": 0.8
+  },
+  "status": "active",
+  "execution_count": 0,
+  "success_rate": 0.0,
+  "last_executed": null,
+  "tags": [
+    "custom",
+    "assistant"
+  ],
+  "metadata": {}
+}

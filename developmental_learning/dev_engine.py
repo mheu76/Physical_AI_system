@@ -102,7 +102,11 @@ class SkillAcquisitionEngine:
     async def _initialize_basic_skills(self) -> Dict[str, Skill]:
         """기본 스킬 비동기 초기화"""
         try:
-            basic_skills = {}
+            basic_skills = await self._initialize_basic_skills_sync()
+            return basic_skills
+        except Exception as e:
+            logger.error(f"Failed to initialize basic skills: {e}")
+            return {}
         
     def _build_dependency_graph(self):
         """스킬 의존성 그래프 구축"""

@@ -1,0 +1,53 @@
+{
+  "id": "67d2ddae-aea9-4ea9-82b1-ffa89a1cdb1c",
+  "name": "Custom Assistant",
+  "description": "사용자 요청 '물체를 집어서 정리하는 로봇 도우미'을 처리하는 어시스턴트",
+  "created_at": "2025-08-25T23:04:31.327284",
+  "updated_at": "2025-08-25T23:04:31.327284",
+  "creator_instruction": "물체를 집어서 정리하는 로봇 도우미",
+  "capabilities": [
+    {
+      "name": "Task Execution",
+      "description": "물체를 집어서 정리하는 로봇 도우미",
+      "tools_required": [
+        "mission_executor"
+      ],
+      "parameters": {
+        "task": "물체를 집어서 정리하는 로봇 도우미"
+      },
+      "confidence": 1.0
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "user_request",
+      "action_sequence": [
+        {
+          "action": "analyze_request",
+          "parameters": {}
+        },
+        {
+          "action": "execute_task",
+          "parameters": {
+            "task": "물체를 집어서 정리하는 로봇 도우미"
+          }
+        }
+      ],
+      "priority": 5,
+      "conditions": {}
+    }
+  ],
+  "personality": {
+    "helpful": 0.9,
+    "reliable": 0.8
+  },
+  "status": "active",
+  "execution_count": 0,
+  "success_rate": 0.0,
+  "last_executed": null,
+  "tags": [
+    "custom",
+    "assistant"
+  ],
+  "metadata": {}
+}

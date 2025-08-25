@@ -599,6 +599,27 @@ class SLMFoundation:
             "total_patterns": total_patterns,
             "patterns": pattern_list
         }
+    
+    async def generate_response(self, user_input: str, context: Dict[str, Any] = None) -> str:
+        """사용자 입력에 대한 응답 생성"""
+        try:
+            if self.phi35_ai and hasattr(self.phi35_ai, 'generate_response'):
+                return await self.phi35_ai.generate_response(user_input, context or {})
+            else:
+                # 폴백: 간단한 규칙 기반 응답
+                if "안녕" in user_input or "hello" in user_input.lower():
+                    return "안녕하세요! Physical AI Code입니다. 무엇을 도와드릴까요?"
+                elif "상태" in user_input or "status" in user_input.lower():
+                    return "시스템이 정상적으로 작동 중입니다."
+                elif "도구" in user_input or "tool" in user_input.lower():
+                    return "사용 가능한 도구들을 확인하겠습니다."
+                elif "미션" in user_input or "mission" in user_input.lower():
+                    return f"미션을 처리하겠습니다: {user_input}"
+                else:
+                    return f"입력을 받았습니다: {user_input}. 처리 중입니다."
+        except Exception as e:
+            logger.error(f"응답 생성 중 오류: {e}")
+            return "죄송합니다. 응답 생성 중 오류가 발생했습니다."
 
 # 테스트 코드
 if __name__ == "__main__":
